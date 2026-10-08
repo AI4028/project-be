@@ -33,3 +33,22 @@ requirements.txt   # Runtime dependencies
 
 Keep secrets in a local `.env` file; it is ignored by Git. The app does not yet
 load environment files or include a database, authentication, or business logic.
+
+# Git merge convention
+
+want to work on a specific feature: create a feature/(name of the feature) branch (from branch develop):
+```
+git checkout -b feature/(name of the feature)
+```
+
+finished working, merge to develop:
+```
+git checkout develop
+git merge feature/(name of the feature)
+```
+
+merging into main is only after develop passess all the checks:
+```
+git checkout main
+git merge develop
+```
