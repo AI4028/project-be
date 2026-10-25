@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>GIST Cafe - 사이렌 오더 & 배리어프리 키오스크</title>
+  <meta name="description" content="시각장애인을 위한 한국어 음성 인식 및 음성 안내 기반의 배리어프리 키오스크 주문 앱">
+  <!-- Pretendard: 대한민국 표준 최고급 웹 폰트 -->
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- 스크린리더 본문 바로가기 -->
+  <a href="#main-content" class="skip-link">본문으로 바로가기</a>
+
+  <!-- ARIA 실시간 낭독 영역 (스크린리더 사용자용) -->
+  <div id="sr-announcer" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
+
+  <!-- 데스크톱 전용 플로팅 시연 모드 바 (모바일 접속 시 자동 숨김) -->
+  <aside class="floating-demo-bar" aria-label="화면 모드 선택">
+    <span class="demo-label">화면 모드</span>
+    <div class="demo-tabs-group" role="tablist">
+      <button id="tab-phone" class="demo-tab active" role="tab" aria-selected="true">📱 고객 모바일</button>
+      <button id="tab-kiosk" class="demo-tab" role="tab" aria-selected="false">🖥️ 매장 키오스크</button>
+      <button id="tab-split" class="demo-tab" role="tab" aria-selected="false">⚡ 분할 시연</button>
+      <button id="btn-show-qr" class="demo-tab" role="button" title="스마트폰 연결 QR 코드 보기">📷 모바일 QR</button>
+    </div>
+  </aside>
+
+  <!-- 메인 레이아웃 래퍼 -->
+  <main id="main-content" class="app-layout" role="main">
+    <div id="views-container" class="views-wrapper mode-phone">
+
+      <!-- ================= 1. 스마트폰 앱 (갈지도) ================= -->
+      <section id="phone-view" class="phone-screen" aria-label="갈지도 스마트 모바일">
+        
+        <!-- ================= A. 갈지도 탐색 첫 화면 (기본 노출) ================= -->
+        <div id="galjido-discovery-view" class="galjido-discovery-view">
+          
+          <!-- 탐색 상단 바 -->
+          <header class="discovery-top-bar">
+            <div class="discovery-brand">
+              <div class="brand-icon-box">
+                <svg class="brand-logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                  <circle cx="12" cy="10" r="3"></circle>
+                </svg>
+              </div>
+              <span class="brand-logo-text">갈지도</span>
+            </div>
+            <div class="discovery-status-pill">
+              <span class="beacon-pulse-dot"></span>
+              <span id="disc-beacon-label">매장 탐색 중</span>
+            </div>
+          </header>
+
+          <!-- 탐색 메인 본문 -->
+          <div class="discovery-content-body">
+            <div class="discovery-title-area">
+              <h1 class="discovery-hero-headline" id="disc-main-title">주변 매장을 찾고 있어요</h1>
+              <p class="discovery-hero-subtext">블루투스 신호가 잡히면 자동으로 주문창이 열립니다</p>
+            </div>
+
+            <!-- 감성적인 블루 & 화이트 소프트 펄스 비콘 (인공지능 레이더 느낌 완전 배제) -->
+            <div class="beacon-pulse-container" id="radar-beacon-trigger" role="button" tabindex="0" title="매장 블루투스 탐색" aria-label="매장 블루투스 탐색">
+              <div class="pulse-ring ring-1"></div>
+              <div class="pulse-ring ring-2"></div>
+              <div class="pulse-ring ring-3"></div>
+              <div class="center-beacon-circle">
+                <div class="beacon-inner-glow">
+                  <svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+                    <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
+                    <line x1="6" y1="1" x2="6" y2="4"></line>
+                    <line x1="10" y1="1" x2="10" y2="4"></line>
+                    <line x1="14" y1="1" x2="14" y2="4"></line>
+                  </svg>
+                </div>
+              </div>
+              <div class="beacon-tap-hint">터치하여 블루투스 검색</div>
+            </div>
+
+            <!-- 모바일 블루투스 연동 카드 (핵심 기능) -->
+            <div class="mobile-ble-card">
+              <div class="ble-card-header">
+                <div class="ble-card-title">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6.5 6.5l11 11L12 23V1l5.5 5.5-11 11"></path>
+                  </svg>
+                  <span>모바일 블루투스 연결</span>
+                </div>
+                <div class="ble-status-badge">
+                  <span id="ble-status-dot" class="ble-dot-pulsing"></span>
+                  <span id="ble-status-text">신호 대기 중</span>
+                </div>
+              </div>
+
+              <button id="btn-mobile-ble-scan" class="btn-ble-primary" type="button">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M6.5 6.5l11 11L12 23V1l5.5 5.5-11 11"></path>
+                </svg>
+                <span>스마트폰 블루투스로 매장 신호 잡기</span>
+              </button>
+
+            </div>
+
+
+          </div>
+
+          <!-- 블루투스 100m 이내 감지 시 슬라이드 업 팝업 카드 (Toss 감성 바텀시트) -->
+          <div id="detected-store-popup" class="detected-store-popup" style="display: none;">
+            <div class="popup-drag-handle"></div>
+            <div class="popup-header">
+              <div class="popup-store-title">
+                <span class="popup-store-emoji">☕</span>
+                <span id="detected-store-name">GIST Cafe점</span>
+              </div>
+              <span id="detected-distance-val" class="dist-pill-large">신호 감지</span>
+            </div>
+            <div class="popup-question-text">매장을 연결할까요?</div>
+            <div class="popup-voice-hint">🗣️ <strong>"응"</strong>이라고 말씀하시거나 아래 버튼을 눌러주세요.</div>
+            <div class="popup-action-row">
+              <button id="btn-confirm-connect" class="btn-voice-confirm" type="button">
+                🗣️ 응 (매장 연결하기)
+              </button>
+              <button id="btn-reject-connect" class="btn-voice-cancel" type="button">
+                다음에
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ================= B. 매장 연결 후 주문 화면 (초기에는 숨김) ================= -->
+        <div id="galjido-order-view" class="galjido-order-view" style="display: none;">
+          
+          <!-- 실시간 거리 & 연결 상태 바 -->
+          <div class="live-kiosk-distance-bar">
+            <div class="live-kiosk-distance-info">
+              <span class="status-dot connected"></span>
+              <span id="header-distance-text">키오스크 신호 연동됨</span>
+            </div>
+            <button id="btn-disconnect-store" class="btn-mini-disconnect" title="매장 연결 종료">
+              연결 종료
+            </button>
+          </div>
+
+          <!-- 네이티브 앱 스타일 상단 바 -->
+          <header class="mobile-app-header">
+            <div class="header-left">
+              <!-- 매장 정보 버튼 -->
+              <button id="btn-select-store" class="store-selector-btn" title="매장 변경 및 상세 정보" aria-haspopup="dialog">
+                <svg class="header-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                  <circle cx="12" cy="10" r="3"></circle>
+                </svg>
+                <span id="connection-label" class="store-name-text">GIST Cafe점</span>
+              </button>
+            </div>
+
+            <div class="header-right">
+              <!-- 실내 길안내 -->
+              <button id="btn-indoor-guide" class="header-action-btn" title="매장 실내 음성 길안내" aria-label="매장 실내 길안내">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+                </svg>
+              </button>
+
+              <!-- 배리어프리 접근성 설정 버튼 -->
+              <button id="btn-open-accessibility" class="header-action-btn" title="배리어프리 접근성 설정 (고대비, 글자 크기, 음성)" aria-label="접근성 설정 열기">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+              </button>
+
+              <!-- 장바구니 아이콘 -->
+              <button id="btn-top-cart" class="header-action-btn cart-badge-wrap" title="장바구니 확인" aria-label="장바구니 확인">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+                  <line x1="3" y1="6" x2="21" y2="6"></line>
+                  <path d="M16 10a4 4 0 0 1-8 0"></path>
+                </svg>
+                <span id="header-cart-badge" class="header-badge-count">0</span>
+              </button>
+            </div>
+          </header>
+
+          <!-- 모바일 스크롤 바디 -->
+          <div class="mobile-scroll-body">
+            
+            <!-- 스타벅스 감성 메인 타이틀 영역 -->
+            <div class="siren-hero-banner">
+              <div class="hero-text-group">
+                <h1 class="siren-hero-title">Order</h1>
+                <div id="store-desc-line" class="siren-hero-sub">광주광역시 북구 첨단과기로 123 (GIST) • 무단차 1층</div>
+              </div>
+              <div class="store-status-pill">
+                <span class="status-live-dot" aria-hidden="true"></span>
+                <span>매장 주문 가능</span>
+              </div>
+            </div>
+
+          <!-- 스타벅스 서브 카테고리 탭 (가로 스크롤) -->
+          <nav class="category-nav-scroll" aria-label="메뉴 카테고리 선택" id="category-tabs">
+            <!-- 동적 렌더링 -->
+          </nav>
+
+          <!-- 메뉴 섹션 -->
+          <div id="menu-section" class="menu-list-section">
+            <div class="menu-section-header">
+              <h2 class="section-title">음료 & 디저트</h2>
+              <span id="menu-count-badge" class="section-count">총 6개</span>
+            </div>
+
+            <!-- 메뉴 카드 리스트 (실제 고해상도 제품 사진 렌더링) -->
+            <div class="menu-items-container" id="menu-items-grid" role="list">
+              <!-- JS 동적 생성 -->
+            </div>
+          </div>
+
+          <!-- 주문 완료 상태 카드 (주문 제출 후 표출) -->
+          <div id="order-status-section" class="order-status-view" style="display: none;">
+            <div class="order-ticket-card">
+              <div class="ticket-header">
+                <span class="ticket-store-name">GIST Cafe점</span>
+                <span class="ticket-time">방금 접수됨</span>
+              </div>
+              <div class="ticket-number-box">
+                <div class="ticket-number-label">주문 번호</div>
+                <div id="live-order-number" class="ticket-number-value">#1</div>
+              </div>
+              <div id="order-status-announcement" class="ticket-message">
+                주문이 성공적으로 접수되었습니다.
+              </div>
+              <p id="order-status-desc" class="ticket-subtext">
+                카운터에서 결제해 주세요. 음료가 준비되면 음성으로 호출해 드립니다.
+              </p>
+
+              <!-- 주문 진행 4단계 트래커 -->
+              <div class="order-progress-stepper" role="progressbar" aria-label="주문 진행 현황">
+                <div id="step-submitted" class="step-item active">
+                  <div class="step-circle">1</div>
+                  <span class="step-name">접수 대기</span>
+                </div>
+                <div id="step-accepted" class="step-item">
+                  <div class="step-circle">2</div>
+                  <span class="step-name">주문 승인</span>
+                </div>
+                <div id="step-preparing" class="step-item">
+                  <div class="step-circle">3</div>
+                  <span class="step-name">음료 제조</span>
+                </div>
+                <div id="step-ready" class="step-item">
+                  <div class="step-circle">4</div>
+                  <span class="step-name">준비 완료</span>
+                </div>
+              </div>
+
+              <!-- 주문 요약 -->
+              <div id="order-summary-box" class="ticket-summary-box">
+                <!-- 동적 렌더링 -->
+              </div>
+
+              <div class="ticket-actions">
+                <button id="btn-cancel-order" class="btn-ticket-cancel">
+                  주문 취소하기
+                </button>
+                <button id="btn-new-order" class="btn-ticket-new">
+                  새 주문 시작
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div style="height: 120px;"></div>
+        </div>
+
+        <!-- 플로팅 카트 바 (아이템 담았을 때 부드럽게 슬라이드 업) -->
+        <aside id="floating-cart" class="floating-cart-pill hidden" aria-label="장바구니 요약">
+          <div class="cart-pill-content">
+            <div class="cart-pill-badge" id="cart-item-count">0</div>
+            <div class="cart-pill-price" id="cart-total-amount">0원</div>
+          </div>
+          <button id="btn-open-cart" class="btn-cart-checkout">
+            <span>장바구니 확인</span>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
+        </aside>
+
+        <!-- 네이티브 모바일 하단 탭 바 (배리어프리 음성 마이크 중앙 배치) -->
+        <nav class="mobile-bottom-nav" role="navigation" aria-label="하단 네비게이션">
+          <div class="nav-tab active">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+              <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
+              <line x1="6" y1="1" x2="6" y2="4"></line>
+              <line x1="10" y1="1" x2="10" y2="4"></line>
+              <line x1="14" y1="1" x2="14" y2="4"></line>
+            </svg>
+            <span>주문하기</span>
+          </div>
+
+          <!-- 중앙 시각장애인 배리어프리 플로팅 음성 마이크 -->
+          <div class="center-mic-container">
+            <button id="btn-voice-mic" class="center-mic-btn" aria-label="음성 주문 마이크 (단축키 Space 또는 M)" title="음성 주문 마이크">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                <line x1="12" y1="19" x2="12" y2="23"></line>
+                <line x1="8" y1="23" x2="16" y2="23"></line>
+              </svg>
+            </button>
+            <div id="voice-status-label" class="center-mic-label">음성 주문</div>
+            <div id="voice-hint-label" class="sr-only">말씀해 주세요</div>
+          </div>
+
+          <!-- 긴급 직원 호출 -->
+          <button id="btn-call-help" class="nav-tab" title="직원 호출 (단축키 H)">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+            <span>직원 호출</span>
+          </button>
+        </nav>
+        </div> <!-- /galjido-order-view -->
+      </section>
+
+
+      <!-- ================= 2. 키오스크 디스플레이 뷰 (매장 화면 시뮬레이터) ================= -->
+      <section id="kiosk-view" class="kiosk-screen" aria-label="매장 키오스크 화면" style="display: none;">
+        <div class="kiosk-top-status-bar">
+          <div class="kiosk-brand-title">
+            <span class="kiosk-logo-dot"></span>
+            <span class="kiosk-title-text">GK01 키오스크 1번기 (매장 디스플레이)</span>
+          </div>
+          <div class="kiosk-meta-group">
+            <span id="kiosk-ble-token-badge" class="kiosk-ble-token">BLE Token: 대기 중</span>
+            <span class="kiosk-clock" id="kiosk-live-clock">12:00</span>
+          </div>
+        </div>
+
+        <div class="kiosk-body-grid">
+          <!-- 1) 실시간 직원 호출 경보 배너 -->
+          <div id="kiosk-help-alert-box" class="kiosk-help-banner" style="display: none;">
+            <div class="help-banner-content">
+              <div class="help-banner-left">
+                <span class="help-pulse-icon">🚨</span>
+                <div>
+                  <div class="help-title">고객 도움 요청 발생</div>
+                  <div id="kiosk-help-alert-text" class="help-desc">스마트폰 고객님이 도움을 요청하셨습니다.</div>
+                </div>
+              </div>
+              <button id="btn-resolve-help" class="btn-resolve-help">
+                도움 완료 처리
+              </button>
+            </div>
+          </div>
+
+          <!-- 2) 스마트폰 실시간 장바구니 연동 패널 -->
+          <div class="kiosk-cart-box">
+            <div class="kiosk-box-header">
+              <div class="box-title-group">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="9" cy="21" r="1"></circle>
+                  <circle cx="20" cy="21" r="1"></circle>
+                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                </svg>
+                <h3 id="kiosk-cart-header">스마트폰 연결 대기 중</h3>
+              </div>
+              <button id="btn-kiosk-end-session" class="btn-kiosk-end" style="display: none;">
+                세션 강제 종료
+              </button>
+            </div>
+            <div id="kiosk-cart-content" class="kiosk-cart-body">
+              고객님이 스마트폰 앱에서 담은 항목이 이곳에 실시간으로 표시됩니다.
+            </div>
+          </div>
+
+          <!-- 3) 오늘의 주문 대기열 (KDS 주방 주문 디스플레이) -->
+          <div class="kiosk-orders-box">
+            <div class="kiosk-box-header">
+              <div class="box-title-group">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                <h3>오늘의 주문 대기열</h3>
+              </div>
+              <div id="kiosk-orders-filter" class="kiosk-filter-chips">
+                <button class="filter-chip active" data-filter="">전체</button>
+                <button class="filter-chip" data-filter="submitted">접수 대기</button>
+                <button class="filter-chip" data-filter="preparing">제조 중</button>
+                <button class="filter-chip" data-filter="ready">준비 완료</button>
+              </div>
+            </div>
+            <div id="kiosk-orders-list" class="kiosk-orders-scroll">
+              <div class="empty-orders">접수된 주문이 없습니다.</div>
+            </div>
+          </div>
+
+          <!-- 4) 메뉴 재고 및 품절 관리 패널 -->
+          <div class="kiosk-stock-box">
+            <div class="kiosk-box-header">
+              <h3>📦 매장 메뉴 품절/판매 관리</h3>
+              <span class="stock-header-sub">토글 시 고객 스마트폰에 즉시 동기화</span>
+            </div>
+            <div id="kiosk-availability-list" class="kiosk-stock-grid">
+              <!-- 동적 생성 -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+
+  <!-- ================= 배리어프리 접근성 설정 드로어 (모달) ================= -->
+  <div id="accessibility-drawer" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="access-drawer-title">
+    <div class="drawer-panel">
+      <div class="modal-header">
+        <h2 id="access-drawer-title" class="modal-title">접근성 설정</h2>
+        <button id="btn-close-access-drawer" class="modal-close-btn" aria-label="접근성 창 닫기">✕</button>
+      </div>
+
+      <div class="drawer-content-body">
+        <!-- 1. 고대비 모드 -->
+        <div class="setting-item-row">
+          <div>
+            <div class="setting-item-title">고대비 모드 (WCAG AAA)</div>
+            <div class="setting-item-desc">검정 배경과 네온 노란색/초록색으로 명도 대비를 극대화합니다.</div>
+          </div>
+          <button id="btn-high-contrast" class="toggle-pill-btn" aria-pressed="false">
+            <span id="contrast-text">고대비 켜기</span>
+          </button>
+        </div>
+
+        <!-- 2. 글자 크기 스케일 -->
+        <div class="setting-item-row">
+          <div>
+            <div class="setting-item-title">화면 글자 크기</div>
+            <div class="setting-item-desc">기본 크기, 크게(120%), 아주 크게(145%)로 조절합니다.</div>
+          </div>
+          <button id="btn-font-size" class="toggle-pill-btn">
+            <span id="font-size-text">글자 크게</span>
+          </button>
+        </div>
+
+        <!-- 3. 음성 안내 (TTS) -->
+        <div class="setting-item-row">
+          <div>
+            <div class="setting-item-title">음성 낭독 (TTS)</div>
+            <div class="setting-item-desc">화면의 모든 메뉴와 상태 변화를 한국어로 낭독합니다.</div>
+          </div>
+          <button id="btn-tts-toggle" class="toggle-pill-btn active" aria-pressed="true">
+            <span id="tts-status-text">음성 켜짐</span>
+          </button>
+        </div>
+
+        <!-- 4. 다시 듣기 -->
+        <div class="setting-item-row">
+          <div>
+            <div class="setting-item-title">방금 나온 안내 다시 듣기</div>
+            <div class="setting-item-desc">마지막으로 안내된 음성을 다시 재생합니다. (단축키 R)</div>
+          </div>
+          <button id="btn-repeat-voice" class="toggle-pill-btn">
+            <span>다시 듣기</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ================= 옵션 선택 바텀시트 (모달) ================= -->
+  <div id="option-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-menu-name">
+    <div class="modal-panel bottom-sheet">
+      <div class="modal-header">
+        <div class="option-header-product">
+          <img id="modal-menu-img" src="assets/menu/americano.jpg" class="option-product-thumb" alt="메뉴 이미지" />
+          <div>
+            <h2 id="modal-menu-name" class="modal-title">메뉴 이름</h2>
+            <div id="modal-menu-price" class="modal-price">0원</div>
+          </div>
+        </div>
+        <button id="btn-close-option" class="modal-close-btn" aria-label="옵션 선택 닫기">✕</button>
+      </div>
+
+      <div id="modal-options-body" class="option-groups-container">
+        <!-- 동적 렌더링 -->
+      </div>
+
+      <!-- 수량 선택 -->
+      <div class="option-qty-row">
+        <span class="qty-label">주문 수량</span>
+        <div class="qty-stepper-box">
+          <button id="btn-qty-minus" class="qty-btn" aria-label="수량 1개 감소">−</button>
+          <span id="modal-qty-val" class="qty-number">1</span>
+          <button id="btn-qty-plus" class="qty-btn" aria-label="수량 1개 증가">＋</button>
+        </div>
+      </div>
+
+      <button id="btn-add-to-cart" class="btn-primary-action">
+        <span id="modal-submit-price">장바구니 담기 (0원)</span>
+      </button>
+    </div>
+  </div>
+
+
+  <!-- ================= 장바구니 상세 모달 ================= -->
+  <div id="cart-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="cart-modal-title">
+    <div class="modal-panel bottom-sheet">
+      <div class="modal-header">
+        <h2 id="cart-modal-title" class="modal-title">장바구니</h2>
+        <button id="btn-close-cart" class="modal-close-btn" aria-label="장바구니 닫기">✕</button>
+      </div>
+
+      <!-- 장바구니 목록 -->
+      <div id="cart-items-container" class="cart-items-scroll">
+        <!-- 동적 렌더링 -->
+      </div>
+
+      <!-- 결제 방식 선택 -->
+      <div class="cart-section-box">
+        <div class="cart-section-title">결제 방식 선택</div>
+        <div class="payment-options-grid">
+          <label class="payment-card">
+            <input type="radio" name="paymentMethod" value="counter" checked>
+            <div class="payment-card-body">
+              <span class="payment-name">카운터 직접 결제</span>
+              <span class="payment-desc">직원에게 카드/현금/쿠폰으로 결제</span>
+            </div>
+          </label>
+          <label class="payment-card">
+            <input type="radio" name="paymentMethod" value="kiosk">
+            <div class="payment-card-body">
+              <span class="payment-name">키오스크 카드 결제</span>
+              <span class="payment-desc">매장 키오스크 리더기에 카드 삽입</span>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- 주문 요청사항 메모 (POST /order의 note) -->
+      <div class="cart-section-box">
+        <div class="cart-section-title">주문 요청사항 (선택)</div>
+        <div class="note-input-wrap">
+          <input type="text" id="cart-order-note" placeholder="예: 픽업대에서 번호 크게 불러주세요" maxlength="200">
+          <button type="button" id="btn-note-mic" class="btn-note-mic" title="요청사항 음성 마이크">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+              <line x1="12" y1="19" x2="12" y2="23"></line>
+              <line x1="8" y1="23" x2="16" y2="23"></line>
+            </svg>
+            <span>음성 입력</span>
+          </button>
+        </div>
+        <div class="note-chips-row">
+          <button type="button" class="note-chip">픽업대에서 번호 크게 불러주세요</button>
+          <button type="button" class="note-chip">빨대/냅킨 챙겨주세요</button>
+          <button type="button" class="note-chip">얼음 많이</button>
+          <button type="button" class="note-chip">우유 뜨겁게</button>
+        </div>
+      </div>
+
+      <!-- 결제 금액 및 제출 -->
+      <div class="cart-total-footer">
+        <span class="cart-total-label">총 결제 금액</span>
+        <span id="cart-modal-total-price" class="cart-total-val">0원</span>
+      </div>
+
+      <button id="btn-checkout-submit" class="btn-primary-action">
+        주문 완료하기
+      </button>
+    </div>
+  </div>
+
+
+  <!-- ================= 매장 선택 모달 (GET /stores) ================= -->
+  <div id="store-select-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="store-select-title">
+    <div class="modal-panel bottom-sheet">
+      <div class="modal-header">
+        <h2 id="store-select-title" class="modal-title">매장 선택</h2>
+        <button id="btn-close-store-select" class="modal-close-btn" aria-label="매장 선택 닫기">✕</button>
+      </div>
+      <p class="modal-subtitle">방문하실 매장의 위치와 배리어프리 편의시설 정보를 확인하세요.</p>
+      <div id="stores-list-container" class="stores-list-scroll">
+        <!-- 동적 렌더링 -->
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ================= 매장 실내 길안내 모달 (indoorDirections) ================= -->
+  <div id="indoor-guide-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="indoor-guide-title">
+    <div class="modal-panel bottom-sheet">
+      <div class="modal-header">
+        <h2 id="indoor-guide-title" class="modal-title">매장 실내 음성 길안내</h2>
+        <button id="btn-close-indoor-guide" class="modal-close-btn" aria-label="길안내 닫기">✕</button>
+      </div>
+
+      <div class="indoor-guide-body">
+        <div class="indoor-route-card">
+          <div class="indoor-card-title">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+            </svg>
+            <span>실내 이동 안내</span>
+          </div>
+          <p id="modal-indoor-text" class="indoor-card-text">
+            입구로 들어오시면 키오스크 1은 오른쪽 약 2m 거리에 위치해 있습니다. 카운터와 음료 픽업대는 정면 5m 앞입니다.
+          </p>
+        </div>
+
+        <div class="indoor-access-card">
+          <div class="indoor-card-title">♿ 배리어프리 편의시설</div>
+          <ul id="modal-access-list" class="access-check-list">
+            <li>✓ 1층 무단차 출입구 (계단/턱 없음)</li>
+            <li>✓ 휠체어 이용 가능 카운터</li>
+            <li>✓ 한국어 음성 지원 배리어프리 키오스크 구비</li>
+          </ul>
+        </div>
+
+        <button id="btn-play-indoor-tts" class="btn-primary-action">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          </svg>
+          <span>음성으로 길안내 듣기</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ================= 모바일 접속 QR 코드 모달 ================= -->
+  <div id="mobile-qr-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title">
+    <div class="modal-panel" style="max-width: 360px; text-align: center; padding: 24px;">
+      <div class="modal-header" style="border-bottom: none; margin-bottom: 8px; justify-content: space-between;">
+        <h2 id="qr-modal-title" class="modal-title" style="font-size: 1.2rem; color: #1E40AF;">📱 스마트폰으로 접속</h2>
+        <button id="btn-close-qr-modal" class="modal-close-btn" aria-label="닫기">✕</button>
+      </div>
+      <p style="font-size: 0.88rem; color: #64748B; margin-bottom: 16px;">
+        스마트폰 기본 카메라로 아래 QR 코드를 스캔하세요.
+      </p>
+      <div style="background: #FFFFFF; padding: 12px; border-radius: 16px; border: 1.5px solid #DBEAFE; display: inline-block; box-shadow: 0 8px 24px rgba(37,99,235,0.12);">
+        <img src="assets/mobile_qr.png" alt="갈지도 모바일 접속 QR 코드" style="width: 220px; height: 220px; display: block;" />
+      </div>
+      <div style="margin-top: 16px; font-size: 0.82rem; color: #1E3A8A; font-weight: 700; word-break: break-all; background: #EFF6FF; padding: 10px 12px; border-radius: 10px;">
+        https://centuries-boot-agricultural-champions.trycloudflare.com/app/
+      </div>
+      <p style="margin-top: 8px; font-size: 0.76rem; color: #94A3B8;">
+        ※ HTTPS 보안 연결 지원 (스마트폰 블루투스 및 음성 마이크 자동 허용)
+      </p>
+    </div>
+  </div>
+
+  <!-- 토스트 알림 컨테이너 -->
+  <div id="toast-box" class="toast-container" aria-live="polite"></div>
+
+  <!-- 스크립트 로드 -->
+  <script src="audio.js"></script>
+  <script src="speech.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
