@@ -8,11 +8,13 @@ Messages are JSON events, e.g. {"type": "cart", "kioskId": "GK01", ...}.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
-from sqlalchemy.orm import Session
+from typing import Optional, Union
 
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from starlette.concurrency import run_in_threadpool
+
+from app import db as database
 from app.auth import device_for_token, kiosk_for_key
-from app.db import get_db
 from app.models import KioskSession
 from app.realtime import hub
 
@@ -35,26 +37,42 @@ async def _listen(ws: WebSocket, channel: str) -> None:
         hub.leave(channel, ws)
 
 
+# The token checks below use the database, which blocks. They run in a worker
+# thread: on the event loop, waiting for SQLite's lock would freeze the whole
+# server, including the request that holds the lock and needs the loop to finish.
+
+
+def _kiosk_channel(token: str) -> Optional[str]:
+    with database.SessionLocal() as db:
+        kiosk = kiosk_for_key(db, token)
+        return f"kiosk:{kiosk.id}" if kiosk else None
+
+
+def _session_channel(session_id: str, token: str) -> Union[str, int]:
+    """The channel to listen on, or the close code if refused."""
+    with database.SessionLocal() as db:
+        device = device_for_token(db, token)
+        if device is None:
+            return UNAUTHORIZED
+        session = db.get(KioskSession, session_id)
+        if session is None or session.device_id != device.id:
+            return FORBIDDEN
+        return f"session:{session_id}"
+
+
 @router.websocket("/ws/kiosk")
-async def kiosk_events(ws: WebSocket, token: str = "", db: Session = Depends(get_db)) -> None:
-    kiosk = kiosk_for_key(db, token)
-    if kiosk is None:
+async def kiosk_events(ws: WebSocket, token: str = "") -> None:
+    channel = await run_in_threadpool(_kiosk_channel, token)
+    if channel is None:
         await ws.close(code=UNAUTHORIZED)
         return
-    channel = f"kiosk:{kiosk.id}"
-    db.close()  # don't hold a database connection while the socket is open
     await _listen(ws, channel)
 
 
 @router.websocket("/ws/sessions/{session_id}")
-async def session_events(ws: WebSocket, session_id: str, token: str = "", db: Session = Depends(get_db)) -> None:
-    device = device_for_token(db, token)
-    if device is None:
-        await ws.close(code=UNAUTHORIZED)
+async def session_events(ws: WebSocket, session_id: str, token: str = "") -> None:
+    channel = await run_in_threadpool(_session_channel, session_id, token)
+    if isinstance(channel, int):
+        await ws.close(code=channel)
         return
-    session = db.get(KioskSession, session_id)
-    if session is None or session.device_id != device.id:
-        await ws.close(code=FORBIDDEN)
-        return
-    db.close()
-    await _listen(ws, f"session:{session_id}")
+    await _listen(ws, channel)

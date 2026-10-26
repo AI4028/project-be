@@ -232,3 +232,40 @@ def test_live_update_connections_check_who_is_listening(env):
 def test_health_endpoints_still_work(env):
     assert env.client.get("/").json() == {"message": "Project backend is running"}
     assert env.client.get("/health").json() == {"status": "ok"}
+
+
+def test_websocket_waiting_for_the_database_does_not_freeze_the_server(env):
+    """A WebSocket's token check must not block the event loop while SQLite is locked."""
+    import sqlite3
+    import threading
+    import time
+
+    from app import db as database
+
+    locked = threading.Event()
+
+    def hold_lock():
+        conn = sqlite3.connect(database.engine.url.database, isolation_level=None)
+        conn.execute("BEGIN IMMEDIATE")
+        locked.set()
+        time.sleep(1.5)
+        conn.execute("ROLLBACK")
+        conn.close()
+
+    def open_kiosk_socket():
+        with env.client.websocket_connect(f"/ws/kiosk?token={env.kiosk_key}"):
+            pass
+
+    holder = threading.Thread(target=hold_lock)
+    holder.start()
+    locked.wait()
+    socket = threading.Thread(target=open_kiosk_socket)
+    socket.start()
+    time.sleep(0.2)  # the socket is now waiting for the lock
+
+    started = time.monotonic()
+    assert env.client.get("/health").status_code == 200
+    assert time.monotonic() - started < 0.5
+
+    holder.join()
+    socket.join()
