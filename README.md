@@ -60,7 +60,7 @@ Phone app  --Bluetooth-->  Kiosk app (broadcasts kiosk ID + pairing token)
 ```text
 app/
   main.py          # Application, routers, root and health routes
-  config.py        # Settings (DATABASE_URL, timeouts, limits)
+  config.py        # Settings (DATABASE_URL, CORS, DEMO_MODE, timeouts, limits)
   db.py            # Database connection
   models.py        # Tables: stores, kiosks, devices, sessions, orders
   logic.py         # Pure rules: pricing, tokens, order status (no database)
@@ -74,14 +74,49 @@ app/
     phone.py       # Phone app endpoints
     kiosk.py       # Kiosk app endpoints
     ws.py          # WebSocket live updates
+    demo.py        # Demo-only shortcuts (off unless DEMO_MODE=1)
 scripts/
   seed.py          # Load a store from a JSON file
   create_kiosk.py  # Issue a kiosk key
+hardware/
+  galjido_kiosk_beacon/  # Arduino + ZS-040 Bluetooth beacon at the kiosk
+  change_bt_name/        # Tool to rename the Bluetooth module
+  bt_bridge.py           # Reads the beacon over a COM port, posts to /proximity
 seed/gist-cafe.json  # Demo cafe (placeholder prices and accessibility info)
 tests/             # pytest: rules and full API flow
 requirements.txt   # Runtime dependencies
 requirements-dev.txt  # + test tools
 ```
+
+The web frontend lives in its own repository. It calls this API from another
+origin, which CORS allows (`CORS_ORIGINS`, default `*`). To serve a frontend
+build from this server at `/app` instead, set `FRONTEND_DIR` to its folder.
+
+## Demo mode (web prototype and Arduino beacon)
+
+Normally a phone can only connect to a kiosk by hearing the kiosk's rotating
+Bluetooth token, which proves it is standing there. Web browsers mostly cannot
+read that broadcast, so for demos the server has shortcuts:
+
+| Method and path | What it does |
+| --- | --- |
+| `GET /kiosks/{id}/token` | The kiosk's current pairing token (as if heard over Bluetooth) |
+| `POST /proximity` | `distance`, `storeName`?, `kioskId`?, `rssi`?: a beacon distance reading |
+| `ws://HOST/ws/proximity` | Every proximity reading, live |
+
+They let **anyone** pair with a kiosk remotely, so they are off (404, and the
+WebSocket closes with 4404) unless the server is started with `DEMO_MODE=1`:
+
+```powershell
+$env:DEMO_MODE = "1"; .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0
+```
+
+With the Arduino beacon paired to Windows as a COM port, run the bridge in a
+second terminal: `pip install -r hardware/requirements.txt`, then
+`python hardware/bt_bridge.py COM4` (set `BACKEND_URL` if the server is not on
+`http://127.0.0.1:8000`).
+
+Never enable demo mode on a real deployment.
 
 ## API for the apps
 

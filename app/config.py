@@ -23,3 +23,15 @@ PAYMENT_METHODS = ("counter", "kiosk")
 
 # Order numbers restart every day at midnight Korea time.
 KST_OFFSET_MS = 9 * 60 * 60_000
+
+# Browser origins allowed to call the API, comma-separated ("*" = any).
+# The web frontend lives in its own repo, so it calls from another origin.
+CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
+
+# Optional: serve a built web frontend at /app from this folder.
+FRONTEND_DIR = os.getenv("FRONTEND_DIR") or None
+
+# Demo shortcuts for browsers that cannot read the kiosk's Bluetooth broadcast
+# (see app/routers/demo.py). They let anyone get a kiosk's pairing token, so
+# they are OFF unless DEMO_MODE=1. Never enable them on a real deployment.
+DEMO_MODE = os.getenv("DEMO_MODE", "").lower() in ("1", "true", "yes")

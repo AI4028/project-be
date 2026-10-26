@@ -90,10 +90,13 @@ def _cart_for(db: Session, store_id: str, items: Any) -> dict[str, Any]:
 # ---------- kiosk: rotating Bluetooth pairing token ----------
 
 
-def kiosk_heartbeat(db: Session, kiosk: Kiosk, now: int) -> dict[str, Any]:
+def kiosk_heartbeat(db: Session, kiosk: Kiosk, now: int, mark_seen: bool = True) -> dict[str, Any]:
     """The kiosk calls this about every 30 s and broadcasts the returned
     token over Bluetooth. A phone must send back a current token to
-    connect, which shows it is physically next to the kiosk."""
+    connect, which shows it is physically next to the kiosk.
+
+    mark_seen=False rotates the token without recording that the kiosk
+    itself checked in (used by the demo token shortcut)."""
 
     def run() -> dict[str, Any]:
         db.refresh(kiosk)
@@ -109,7 +112,8 @@ def kiosk_heartbeat(db: Session, kiosk: Kiosk, now: int) -> dict[str, Any]:
             kiosk.previous_expires_at = kiosk.current_expires_at
             kiosk.current_token = generate_token()
             kiosk.current_expires_at = now + config.TOKEN_TTL_MS
-        kiosk.last_seen_at = now
+        if mark_seen:
+            kiosk.last_seen_at = now
         expires_at = kiosk.current_expires_at
         return {
             "kioskId": kiosk.id,
