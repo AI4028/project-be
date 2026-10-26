@@ -1,0 +1,157 @@
+{
+  "_comment": "Demo data for one pilot cafe. Prices, location and accessibility values are PLACEHOLDERS: replace them after visiting the real store.",
+  "storeId": "gist-cafe",
+  "store": {
+    "name": "GIST 카페 (데모)",
+    "nameEn": "GIST Cafe (demo)",
+    "address": "광주광역시 북구 첨단과기로 123 (GIST)",
+    "location": { "lat": 35.2286, "lng": 126.8436 },
+    "geofenceRadiusM": 50,
+    "orderingMethods": ["kiosk", "phone", "staff"],
+    "accessibility": {
+      "floor": 1,
+      "stepFreeEntrance": null,
+      "automaticDoor": null,
+      "elevator": null,
+      "accessibleRestroom": null,
+      "notes": "TODO: fill in after visiting (entrance, door type, route to the counter)."
+    },
+    "kioskFeatures": {
+      "audioGuide": null,
+      "lowPositionScreen": null,
+      "screenMagnifier": null,
+      "highContrast": null
+    },
+    "indoorDirections": "TODO: e.g. 입구로 들어오면 키오스크는 오른쪽, 카운터는 정면에 있습니다."
+  },
+  "kiosks": [
+    { "kioskId": "GK01", "name": "키오스크 1", "nameEn": "Kiosk 1" }
+  ],
+  "menu": [
+    {
+      "id": "americano",
+      "name": "아메리카노",
+      "nameEn": "Americano",
+      "category": "커피",
+      "sortOrder": 1,
+      "price": 2500,
+      "available": true,
+      "description": "에스프레소에 물을 더한 기본 커피",
+      "options": [
+        {
+          "id": "temp", "name": "온도", "type": "single", "required": true,
+          "choices": [
+            { "id": "hot", "name": "따뜻하게", "priceDelta": 0 },
+            { "id": "ice", "name": "아이스", "priceDelta": 0 }
+          ]
+        },
+        {
+          "id": "size", "name": "크기", "type": "single", "required": true,
+          "choices": [
+            { "id": "regular", "name": "레귤러", "priceDelta": 0 },
+            { "id": "large", "name": "라지", "priceDelta": 500 }
+          ]
+        },
+        {
+          "id": "extra", "name": "추가", "type": "multi", "required": false, "maxChoices": 2,
+          "choices": [
+            { "id": "shot", "name": "샷 추가", "priceDelta": 500 },
+            { "id": "decaf", "name": "디카페인", "priceDelta": 500 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cafe-latte",
+      "name": "카페라떼",
+      "nameEn": "Cafe Latte",
+      "category": "커피",
+      "sortOrder": 2,
+      "price": 3500,
+      "available": true,
+      "description": "에스프레소와 우유",
+      "options": [
+        {
+          "id": "temp", "name": "온도", "type": "single", "required": true,
+          "choices": [
+            { "id": "hot", "name": "따뜻하게", "priceDelta": 0 },
+            { "id": "ice", "name": "아이스", "priceDelta": 0 }
+          ]
+        },
+        {
+          "id": "milk", "name": "우유", "type": "single", "required": false,
+          "choices": [
+            { "id": "regular", "name": "일반 우유", "priceDelta": 0 },
+            { "id": "oat", "name": "오트 우유", "priceDelta": 500 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "vanilla-latte",
+      "name": "바닐라라떼",
+      "nameEn": "Vanilla Latte",
+      "category": "커피",
+      "sortOrder": 3,
+      "price": 4000,
+      "available": true,
+      "description": "바닐라 시럽이 들어간 라떼",
+      "options": [
+        {
+          "id": "temp", "name": "온도", "type": "single", "required": true,
+          "choices": [
+            { "id": "hot", "name": "따뜻하게", "priceDelta": 0 },
+            { "id": "ice", "name": "아이스", "priceDelta": 0 }
+          ]
+        },
+        {
+          "id": "whip", "name": "휘핑크림", "type": "single", "required": false,
+          "choices": [
+            { "id": "with", "name": "휘핑크림 올리기", "priceDelta": 0 },
+            { "id": "without", "name": "휘핑크림 빼기", "priceDelta": 0 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "grapefruit-ade",
+      "name": "자몽에이드",
+      "nameEn": "Grapefruit Ade",
+      "category": "음료",
+      "sortOrder": 4,
+      "price": 4500,
+      "available": true,
+      "description": "탄산이 들어간 자몽 음료, 아이스만 가능",
+      "options": []
+    },
+    {
+      "id": "croissant",
+      "name": "크루아상",
+      "nameEn": "Croissant",
+      "category": "베이커리",
+      "sortOrder": 5,
+      "price": 3000,
+      "available": true,
+      "description": "버터 크루아상",
+      "options": [
+        {
+          "id": "warm", "name": "데우기", "type": "single", "required": false,
+          "choices": [
+            { "id": "yes", "name": "데워 주세요", "priceDelta": 0 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cheesecake",
+      "name": "치즈케이크",
+      "nameEn": "Cheesecake",
+      "category": "베이커리",
+      "sortOrder": 6,
+      "price": 5000,
+      "available": false,
+      "description": "오늘은 품절 (품절 처리 테스트용)",
+      "options": []
+    }
+  ]
+}
