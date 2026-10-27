@@ -70,7 +70,7 @@ app/
   schemas.py       # Request bodies
   errors.py        # Error codes and JSON error format
   routers/
-    public.py      # GET /stores, /stores/{id}, /kiosks/{id}
+    public.py      # GET /stores, /stores/nearby, /stores/{id}, /kiosks/{id}
     phone.py       # Phone app endpoints
     kiosk.py       # Kiosk app endpoints
     ws.py          # WebSocket live updates
@@ -142,6 +142,7 @@ kiosk is an iPad or an Android tablet; to be decided with the app team.)
 | --- | --- | --- |
 | `POST /devices` | — | Get an anonymous device token |
 | `GET /stores`, `GET /stores/{id}` | — | Store info, accessibility, menu |
+| `GET /stores/nearby?lat=&lng=&radiusM=` | — | Stores within `radiusM` (default 2000) for the map, nearest first, each with `distanceM` and `insideGeofence` |
 | `POST /sessions` | `kioskId`, `token` | Connect to a kiosk → `sessionId` |
 | `GET /sessions/{id}` | — | Connection status and cart |
 | `PUT /sessions/{id}/cart` | `items` | Update the cart shown on the kiosk |

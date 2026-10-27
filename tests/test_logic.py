@@ -13,6 +13,7 @@ from app.logic import (
     TOKEN_ALPHABET,
     build_order_lines,
     check_transition,
+    distance_m,
     generate_token,
     kst_day,
     summarize_order,
@@ -136,3 +137,11 @@ def test_transact_retries_when_another_request_changed_the_same_row():
     db = FakeDb()
     assert transact(db, fn) == "ok"
     assert len(calls) == 2 and db.rollbacks == 1 and db.commits == 1
+
+
+def test_distance_between_points():
+    assert distance_m(35.2286, 126.8436, 35.2286, 126.8436) == 0
+    # One degree of latitude is about 111.2 km anywhere on Earth.
+    assert distance_m(0, 0, 1, 0) == pytest.approx(111_195, abs=1)
+    # GIST to Seoul Station: about 259 km in a straight line.
+    assert distance_m(35.2286, 126.8436, 37.5547, 126.9707) == pytest.approx(258_800, rel=0.01)

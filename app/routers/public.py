@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.errors import AppError
+from app.logic import distance_m
 from app.models import Kiosk, Store
 
 router = APIRouter(tags=["stores"])
@@ -37,6 +38,29 @@ def store_dict(store: Store, with_menu: bool) -> dict[str, Any]:
 def list_stores(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
     """All stores with location and accessibility info (no menus)."""
     return [store_dict(s, with_menu=False) for s in db.scalars(select(Store).order_by(Store.name))]
+
+
+@router.get("/stores/nearby")
+def nearby_stores(
+    lat: float = Query(ge=-90, le=90),
+    lng: float = Query(ge=-180, le=180),
+    radius_m: int = Query(2000, alias="radiusM", ge=1, le=20000),
+    db: Session = Depends(get_db),
+) -> list[dict[str, Any]]:
+    """Stores within radiusM of the phone, nearest first, for the map.
+
+    Each store also has `distanceM` and `insideGeofence` (the phone is within
+    the store's geofenceRadiusM, i.e. it has arrived).
+    """
+    found = []
+    for store in db.scalars(select(Store).where(Store.lat.is_not(None), Store.lng.is_not(None))):
+        meters = distance_m(lat, lng, store.lat, store.lng)
+        if meters <= radius_m:
+            data = store_dict(store, with_menu=False)
+            data["distanceM"] = round(meters)
+            data["insideGeofence"] = store.geofence_radius_m is not None and meters <= store.geofence_radius_m
+            found.append(data)
+    return sorted(found, key=lambda s: s["distanceM"])
 
 
 @router.get("/stores/{store_id}")
