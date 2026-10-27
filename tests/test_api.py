@@ -215,6 +215,24 @@ def test_store_info_for_accessibility_and_menus(env):
     assert env.client.get("/kiosks/GK01").json()["name"] == "키오스크 1"
 
 
+def test_nearby_stores_for_the_map(env):
+    # At the cafe: inside its 50 m geofence. other-cafe has no location, so it never shows.
+    at_cafe = env.client.get("/stores/nearby", params={"lat": 35.2286, "lng": 126.8436}).json()
+    assert [(s["storeId"], s["distanceM"], s["insideGeofence"]) for s in at_cafe] == [("gist-cafe", 0, True)]
+    assert "menu" not in at_cafe[0]
+
+    # About 100 m north: listed with its distance, but not arrived yet.
+    walking = env.client.get("/stores/nearby", params={"lat": 35.2295, "lng": 126.8436}).json()
+    assert walking[0]["insideGeofence"] is False
+    assert 95 <= walking[0]["distanceM"] <= 105
+
+    # Outside the search radius: nothing.
+    assert env.client.get("/stores/nearby", params={"lat": 35.2295, "lng": 126.8436, "radiusM": 50}).json() == []
+
+    error(env.client.get("/stores/nearby", params={"lat": 91, "lng": 0}), 400, "bad-request")
+    error(env.client.get("/stores/nearby"), 400, "bad-request")
+
+
 def test_live_update_connections_check_who_is_listening(env):
     phone, session_id = connected(env)
     for url, code in [
