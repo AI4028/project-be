@@ -43,7 +43,7 @@ flowchart LR
 | Part | Repo | Stack |
 | --- | --- | --- |
 | API | this repo | FastAPI, SQLAlchemy, SQLite (PostgreSQL in production), WebSocket |
-| Web app | [project-fe](https://github.com/AI4028/project-fe) | HTML, CSS, JS, Web Speech API, Web Bluetooth |
+| App | [project-fe](https://github.com/AI4028/project-fe) | Expo (React Native) for Android, iOS and web |
 | Beacon | [hardware](hardware.md) | Arduino, ZS-040 Bluetooth module |
 
 Pairing and ordering step by step: [README](../README.md#how-it-works).
