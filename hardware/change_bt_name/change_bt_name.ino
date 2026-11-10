@@ -1,9 +1,6 @@
 /*
- * ==============================================================================
- * change_bt_name.ino - 아두이노 블루투스(ZS-040 / HC-05 / HC-06 / HM-10) 이름 변경 도구
- * ==============================================================================
- * 
- * [사용 방법]
+ * change_bt_name.ino - 블루투스 모듈(ZS-040 / HC-05 / HC-06 / HM-10) 이름 변경
+ *
  * 1. 이 코드를 아두이노에 업로드합니다.
  * 2. 아두이노 IDE의 [시리얼 모니터]를 엽니다.
  * 3. 오른쪽 아래 전송 설정을 [Both NL & CR] (또는 보드에 맞게) 및 [9600 baud]로 맞춥니다.
@@ -12,22 +9,18 @@
 
 #include <SoftwareSerial.h>
 
-// D2: RX (블루투스 TXD 연결), D3: TX (블루투스 RXD 연결)
-SoftwareSerial BTSerial(2, 3);
+SoftwareSerial BTSerial(2, 3);  // RX (모듈 TXD), TX (모듈 RXD)
 
-// ★ 여기에 설정하고 싶은 블루투스 이름을 적어주세요 (영문/숫자 권장)
-const char* NEW_BT_NAME = "Test01_GIST_Cafe"; 
+// 바꿀 이름 (영문/숫자 권장)
+const char* NEW_BT_NAME = "Test01_GIST_Cafe";
 
 void setup() {
   Serial.begin(9600);
-  
-  // HC-05의 AT 모드는 기본 38400, HC-06 / HM-10은 기본 9600입니다.
-  BTSerial.begin(9600); 
 
-  Serial.println(F("=================================================="));
-  Serial.println(F(" 🔧 아두이노 블루투스 기기 이름 변경 도구"));
-  Serial.println(F("=================================================="));
-  Serial.println(F("시리얼 모니터에서 직접 AT 명령어를 입력할 수도 있습니다."));
+  // HC-05의 AT 모드는 기본 38400, HC-06 / HM-10은 기본 9600입니다.
+  BTSerial.begin(9600);
+
+  Serial.println(F("블루투스 이름 변경 도구. AT 명령어를 직접 입력할 수도 있습니다."));
   Serial.println(F("예) AT -> OK 확인"));
   Serial.println(F("--------------------------------------------------"));
 
@@ -41,7 +34,7 @@ void setup() {
   // 2. 이름 변경 시도 (HM-10 / AT-09 BLE 방식)
   Serial.print(F("2. 이름 변경 전송 시도 -> "));
   Serial.println(NEW_BT_NAME);
-  
+
   // HM-10 / AT-09 표준
   BTSerial.print("AT+NAME");
   BTSerial.print(NEW_BT_NAME);
