@@ -1,10 +1,8 @@
-"""Create (or replace) the secret key a kiosk app uses to sign in.
+"""Issue a kiosk's secret key. Run the seed script first.
 
     python -m scripts.create_kiosk GK01
 
-Prints the key ONCE. Put it in the kiosk app's settings; it cannot be
-shown again (only its hash is stored). Running this again makes a new key
-and the old one stops working. Run the seed script first.
+The key is printed once (only its hash is stored). Re-running revokes the old key.
 """
 
 from __future__ import annotations

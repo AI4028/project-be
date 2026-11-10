@@ -1,4 +1,4 @@
-"""Open endpoints: store info for Stage 1 (accessibility) and menus."""
+"""Public endpoints: stores, accessibility info, menus."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def store_dict(store: Store, with_menu: bool) -> dict[str, Any]:
 
 @router.get("/stores")
 def list_stores(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
-    """All stores with location and accessibility info (no menus)."""
+    """All stores, without menus."""
     return [store_dict(s, with_menu=False) for s in db.scalars(select(Store).order_by(Store.name))]
 
 
@@ -47,11 +47,7 @@ def nearby_stores(
     radius_m: int = Query(2000, alias="radiusM", ge=1, le=20000),
     db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
-    """Stores within radiusM of the phone, nearest first, for the map.
-
-    Each store also has `distanceM` and `insideGeofence` (the phone is within
-    the store's geofenceRadiusM, i.e. it has arrived).
-    """
+    """Stores within radiusM, nearest first, with `distanceM` and `insideGeofence`."""
     found = []
     for store in db.scalars(select(Store).where(Store.lat.is_not(None), Store.lng.is_not(None))):
         meters = distance_m(lat, lng, store.lat, store.lng)
@@ -74,7 +70,7 @@ def get_store(store_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
 
 @router.get("/kiosks/{kiosk_id}")
 def get_kiosk(kiosk_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
-    """Public kiosk info, e.g. its name to read out before connecting."""
+    """Kiosk name, e.g. to read aloud before pairing."""
     kiosk = db.get(Kiosk, kiosk_id)
     if kiosk is None:
         raise AppError("kiosk-not-found", "Kiosk not found.")

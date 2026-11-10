@@ -1,8 +1,8 @@
-"""Endpoints the kiosk app calls. Send `Authorization: Bearer ksk_...`."""
+"""Kiosk endpoints. Auth: `Bearer ksk_...`."""
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
@@ -19,27 +19,29 @@ router = APIRouter(prefix="/kiosk", tags=["kiosk"])
 
 
 @router.post("/heartbeat")
-def heartbeat(kiosk: Kiosk = Depends(current_kiosk), db: Session = Depends(get_db), now: int = Depends(get_now)) -> dict[str, Any]:
-    """Get the Bluetooth pairing token. Call again after `refreshInMs`."""
+def heartbeat(
+    kiosk: Kiosk = Depends(current_kiosk), db: Session = Depends(get_db), now: int = Depends(get_now)
+) -> dict[str, Any]:
+    """The Bluetooth pairing token to broadcast. Call again after `refreshInMs`."""
     return service.kiosk_heartbeat(db, kiosk, now)
 
 
 @router.get("/session")
 def active_session(
     kiosk: Kiosk = Depends(current_kiosk), db: Session = Depends(get_db), now: int = Depends(get_now)
-) -> Optional[dict[str, Any]]:
-    """The phone currently connected (with its cart), or null."""
+) -> dict[str, Any] | None:
+    """The connected phone and its cart, or null."""
     return service.kiosk_active_session(db, kiosk, now)
 
 
 @router.get("/orders")
 def todays_orders(
-    status: Optional[str] = None,
+    status: str | None = None,
     kiosk: Kiosk = Depends(current_kiosk),
     db: Session = Depends(get_db),
     now: int = Depends(get_now),
 ) -> list[dict[str, Any]]:
-    """Today's orders for this store, newest first. Optional ?status=submitted"""
+    """Today's orders, newest first. Filter with ?status=."""
     return service.kiosk_orders(db, kiosk, now, status)
 
 
@@ -87,5 +89,5 @@ def end_phone_session(
 def set_availability(
     item_id: str, body: AvailabilityIn, kiosk: Kiosk = Depends(current_kiosk), db: Session = Depends(get_db)
 ) -> dict[str, Any]:
-    """Staff marks a menu item sold out (available=false) or back in stock."""
+    """Mark an item sold out or back in stock."""
     return service.set_item_availability(db, kiosk, item_id, body.available)

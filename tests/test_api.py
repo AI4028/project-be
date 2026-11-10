@@ -248,7 +248,7 @@ def test_live_update_connections_check_who_is_listening(env):
 
 
 def test_health_endpoints_still_work(env):
-    assert env.client.get("/").json() == {"message": "Project backend is running"}
+    assert env.client.get("/").json() == {"message": "Galjido API is running"}
     assert env.client.get("/health").json() == {"status": "ok"}
 
 

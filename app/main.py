@@ -12,19 +12,17 @@ from app.routers import demo, kiosk, phone, public, ws
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    create_tables()  # creates missing tables; existing data is kept
+    create_tables()  # creates missing tables only
     yield
 
 
-app = FastAPI(title="Project Backend", lifespan=lifespan)
-# Apps authenticate with Bearer tokens, not cookies, so no credentials needed.
+app = FastAPI(title="Galjido API", lifespan=lifespan)
+# Bearer tokens, not cookies, so no credentials needed.
 app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 install_error_handlers(app)
-app.include_router(public.router)
-app.include_router(phone.router)
-app.include_router(kiosk.router)
-app.include_router(ws.router)
-app.include_router(demo.router)
+
+for module in (public, phone, kiosk, ws, demo):
+    app.include_router(module.router)
 
 if config.FRONTEND_DIR:
     app.mount("/app", StaticFiles(directory=config.FRONTEND_DIR, html=True), name="frontend")
@@ -32,7 +30,7 @@ if config.FRONTEND_DIR:
 
 @app.get("/")
 def read_root():
-    return {"message": "Project backend is running"}
+    return {"message": "Galjido API is running"}
 
 
 @app.get("/health")

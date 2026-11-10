@@ -1,16 +1,14 @@
-"""The ordering logic: pairing, cart, orders, help and order status.
+"""Ordering flow: pairing, cart, orders, help, status.
 
-Every function takes the database session, the caller (a Device or a
-Kiosk) and `now` (ms), changes the database inside one transaction, and
-returns an *event* dict. The routers send that event to the kiosk and
-the phone over WebSockets.
+Each mutation runs in one transaction and returns an event dict that the
+routers publish to the kiosk and phone.
 """
 
 from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
-from typing import Any, Optional, TypeVar
+from typing import Any, TypeVar
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -36,9 +34,7 @@ T = TypeVar("T")
 
 
 def transact(db: Session, fn: Callable[[], T], attempts: int = 5) -> T:
-    """Run fn and commit. If another request changed the same rows at the
-    same moment (stale version or duplicate order number), roll back and
-    run fn again with fresh data."""
+    """Run fn and commit, retrying on a concurrent write (stale version or duplicate order number)."""
     for attempt in range(attempts):
         try:
             result = fn()
@@ -91,12 +87,10 @@ def _cart_for(db: Session, store_id: str, items: Any) -> dict[str, Any]:
 
 
 def kiosk_heartbeat(db: Session, kiosk: Kiosk, now: int, mark_seen: bool = True) -> dict[str, Any]:
-    """The kiosk calls this about every 30 s and broadcasts the returned
-    token over Bluetooth. A phone must send back a current token to
-    connect, which shows it is physically next to the kiosk.
+    """Rotate the Bluetooth pairing token. Echoing a current token proves a phone is at the kiosk.
 
-    mark_seen=False rotates the token without recording that the kiosk
-    itself checked in (used by the demo token shortcut)."""
+    mark_seen=False rotates without recording a check-in (demo token shortcut).
+    """
 
     def run() -> dict[str, Any]:
         db.refresh(kiosk)
@@ -129,8 +123,7 @@ def kiosk_heartbeat(db: Session, kiosk: Kiosk, now: int, mark_seen: bool = True)
 
 
 def connect_to_kiosk(db: Session, device: Device, kiosk_id: Any, token: Any, now: int) -> dict[str, Any]:
-    """The phone heard the kiosk's Bluetooth broadcast and sends back the kiosk
-    ID and token. One phone at a time per kiosk; an idle phone is replaced."""
+    """Pair a phone with a kiosk. One phone per kiosk; an idle one is replaced."""
     kiosk_id = check_kiosk_id(kiosk_id)
     token = check_token(token)
 
@@ -387,8 +380,8 @@ def get_my_session(db: Session, device: Device, session_id: str) -> dict[str, An
     return session_dict(session)
 
 
-def kiosk_active_session(db: Session, kiosk: Kiosk, now: int) -> Optional[dict[str, Any]]:
-    """What the kiosk screen should show after a restart."""
+def kiosk_active_session(db: Session, kiosk: Kiosk, now: int) -> dict[str, Any] | None:
+    """The live session, so a restarted kiosk can restore its screen."""
     db.refresh(kiosk)
     if not kiosk.active_session_id:
         return None
@@ -398,7 +391,7 @@ def kiosk_active_session(db: Session, kiosk: Kiosk, now: int) -> Optional[dict[s
     return session_dict(session)
 
 
-def kiosk_orders(db: Session, kiosk: Kiosk, now: int, status: Optional[str] = None) -> list[dict[str, Any]]:
+def kiosk_orders(db: Session, kiosk: Kiosk, now: int, status: str | None = None) -> list[dict[str, Any]]:
     """Today's orders for the kiosk's store, newest first."""
     query = select(Order).where(Order.store_id == kiosk.store_id, Order.kst_day == kst_day(now))
     if status:
@@ -419,7 +412,7 @@ def set_item_availability(db: Session, kiosk: Kiosk, item_id: str, available: bo
         if item is None:
             raise AppError("unknown-item", "Item not on this menu.")
         item["available"] = available
-        store.menu = menu  # assign a new list so SQLAlchemy saves the change
+        store.menu = menu  # new list so SQLAlchemy detects the change
         return {"itemId": item_id, "available": available}
 
     return transact(db, run)

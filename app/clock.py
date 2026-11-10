@@ -1,13 +1,7 @@
-"""The current time, as a FastAPI dependency so tests can control it."""
-
-from __future__ import annotations
+"""Current time in ms, as a dependency so tests can override it."""
 
 import time
 
 
-def now_ms() -> int:
-    return int(time.time() * 1000)
-
-
 def get_now() -> int:
-    return now_ms()
+    return int(time.time() * 1000)
