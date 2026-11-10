@@ -1,12 +1,8 @@
-"""Who is calling?
+"""Bearer auth.
 
-- Phones: anonymous. POST /devices returns a device token ("dev_...");
-  the app stores it and sends it as `Authorization: Bearer dev_...`.
-- Kiosks: each kiosk has an API key ("ksk_...") made by
-  scripts/create_kiosk.py, sent as `Authorization: Bearer ksk_...`.
-
-Only SHA-256 hashes of tokens are stored, so a leaked database does not
-leak working tokens.
+Phones: anonymous `dev_...` token from POST /devices.
+Kiosks: `ksk_...` key from scripts/create_kiosk.py.
+Only SHA-256 hashes are stored, so a leaked database leaks no working tokens.
 """
 
 from __future__ import annotations
@@ -14,7 +10,6 @@ from __future__ import annotations
 import hashlib
 import secrets
 import uuid
-from typing import Optional
 
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -48,20 +43,20 @@ def create_device(db: Session, now: int) -> tuple[Device, str]:
     return device, token
 
 
-def device_for_token(db: Session, token: Optional[str]) -> Optional[Device]:
+def device_for_token(db: Session, token: str | None) -> Device | None:
     if not token or not token.startswith("dev_"):
         return None
     return db.scalar(select(Device).where(Device.token_hash == hash_token(token)))
 
 
-def kiosk_for_key(db: Session, key: Optional[str]) -> Optional[Kiosk]:
+def kiosk_for_key(db: Session, key: str | None) -> Kiosk | None:
     if not key or not key.startswith("ksk_"):
         return None
     return db.scalar(select(Kiosk).where(Kiosk.api_key_hash == hash_token(key)))
 
 
 def current_device(
-    creds: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+    creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: Session = Depends(get_db),
 ) -> Device:
     """Dependency for phone endpoints."""
@@ -72,7 +67,7 @@ def current_device(
 
 
 def current_kiosk(
-    creds: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+    creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: Session = Depends(get_db),
 ) -> Kiosk:
     """Dependency for kiosk endpoints."""

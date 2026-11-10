@@ -1,4 +1,4 @@
-"""Pure business rules: no database, no web framework. Easy to unit test."""
+"""Pure business rules: no database, no web framework."""
 
 from __future__ import annotations
 
@@ -7,12 +7,12 @@ import math
 import re
 import secrets
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 from app import config
 from app.errors import AppError
 
-# Crockford base32 without I, L, O, U: unambiguous if read aloud or typed.
+# Crockford base32 (no I, L, O, U): unambiguous when read aloud or typed.
 TOKEN_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 _KIOSK_ID_RE = re.compile(r"^[A-Z0-9]{4}$")
 _TOKEN_RE = re.compile(rf"^[{TOKEN_ALPHABET}]{{{config.TOKEN_LENGTH}}}$")
@@ -36,13 +36,13 @@ def check_token(token: Any) -> str:
 
 def token_matches(
     token: str,
-    current: Optional[str],
-    current_expires_at: Optional[int],
-    previous: Optional[str],
-    previous_expires_at: Optional[int],
+    current: str | None,
+    current_expires_at: int | None,
+    previous: str | None,
+    previous_expires_at: int | None,
     now: int,
 ) -> bool:
-    """Is `token` one of the kiosk's valid tokens? Constant-time comparison."""
+    """True if `token` is the kiosk's current or previous unexpired token (constant time)."""
     for candidate, expires_at in ((current, current_expires_at), (previous, previous_expires_at)):
         if candidate and expires_at is not None and expires_at > now and hmac.compare_digest(candidate, token):
             return True
@@ -50,7 +50,7 @@ def token_matches(
 
 
 def kst_day(now_ms: int) -> str:
-    """'2026-10-08' in Korea time: the key for daily order numbers."""
+    """KST date like '2026-10-08', the key for daily order numbers."""
     return datetime.fromtimestamp((now_ms + config.KST_OFFSET_MS) / 1000, tz=timezone.utc).date().isoformat()
 
 
@@ -60,7 +60,7 @@ EARTH_RADIUS_M = 6_371_000
 
 
 def distance_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
-    """Straight-line distance in metres between two points (haversine)."""
+    """Great-circle distance in metres (haversine)."""
     p1, p2 = math.radians(lat1), math.radians(lat2)
     dp, dl = p2 - p1, math.radians(lng2 - lng1)
     a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
@@ -71,11 +71,9 @@ def distance_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
 
 
 def build_order_lines(menu: list[dict[str, Any]], requested: Any) -> tuple[list[dict[str, Any]], int]:
-    """Check the phone's requested lines against the store menu and compute
-    every price on the server. The phone never sends prices.
+    """Validate requested lines against the menu and price them server-side.
 
-    requested: [{"itemId": "americano", "qty": 1,
-                 "options": {"temp": "ice", "extra": ["shot"]}}]
+    requested: [{"itemId": "americano", "qty": 1, "options": {"temp": "ice", "extra": ["shot"]}}]
     Returns (lines, total).
     """
     items = {m["id"]: m for m in menu if isinstance(m, dict) and "id" in m}
@@ -162,8 +160,7 @@ def build_order_lines(menu: list[dict[str, Any]], requested: Any) -> tuple[list[
 
 
 def summarize_order(lines: list[dict[str, Any]]) -> str:
-    """One-line Korean summary for the kiosk screen and the screen reader:
-    '아메리카노 (아이스, 라지) 1개, 카페라떼 2개'"""
+    """Korean one-liner for the kiosk and screen reader: '아메리카노 (아이스, 라지) 1개, 카페라떼 2개'."""
     parts = []
     for line in lines:
         opts = [o["choiceName"] for o in line["options"]]
@@ -182,7 +179,7 @@ STATUS_TRANSITIONS: dict[str, list[str]] = {
     "cancelled": [],
 }
 
-# Column that records when an order entered each status.
+# Timestamp column per status.
 STATUS_TIME_FIELD = {
     "accepted": "accepted_at",
     "preparing": "preparing_at",

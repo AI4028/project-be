@@ -1,4 +1,4 @@
-"""Endpoints the phone app calls. Send `Authorization: Bearer dev_...`."""
+"""Phone endpoints. Auth: `Bearer dev_...`."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ router = APIRouter(tags=["phone"])
 
 @router.post("/devices", status_code=201)
 def register_device(db: Session = Depends(get_db), now: int = Depends(get_now)) -> dict[str, Any]:
-    """First launch: get an anonymous token. Store it on the phone (Keychain)."""
+    """First launch: get an anonymous token to keep on the device."""
     device, token = create_device(db, now)
     return {"deviceId": device.id, "token": token}
 
@@ -33,7 +33,7 @@ def connect(
     db: Session = Depends(get_db),
     now: int = Depends(get_now),
 ) -> dict[str, Any]:
-    """Connect to the kiosk whose Bluetooth broadcast the phone heard."""
+    """Pair with the kiosk whose Bluetooth token the phone heard."""
     ev = service.connect_to_kiosk(db, device, body.kiosk_id, body.token, now)
     background.add_task(hub.publish, ev)
     return ev
@@ -53,7 +53,7 @@ def update_cart(
     db: Session = Depends(get_db),
     now: int = Depends(get_now),
 ) -> dict[str, Any]:
-    """Replace the cart; the kiosk screen shows it live. Send [] to clear."""
+    """Replace the cart (shown live on the kiosk). [] clears it."""
     ev = service.sync_cart(db, device, session_id, body.items, now)
     background.add_task(hub.publish, ev)
     return ev

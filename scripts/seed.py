@@ -1,9 +1,8 @@
-"""Load a store (accessibility info + menu) and its kiosks into the database.
+"""Load a store, its menu and kiosks from JSON.
 
     python -m scripts.seed seed/gist-cafe.json
 
-Re-running replaces the store and menu and updates kiosk names. It never
-touches kiosk keys, connections or orders.
+Re-running replaces the store and menu and renames kiosks; keys, sessions and orders are kept.
 """
 
 from __future__ import annotations

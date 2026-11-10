@@ -1,12 +1,7 @@
-"""Live updates over WebSockets.
+"""In-memory WebSocket hub: every event goes to the kiosk and the session's phone.
 
-The kiosk listens on /ws/kiosk and each phone on /ws/sessions/{id}. Every
-event (phone connected, cart changed, order placed, help requested, order
-status changed, session ended) is sent to both the kiosk and the phone.
-
-Note: connections live in this process's memory, so run ONE server process
-(uvicorn without --workers). Several processes would need a shared message
-broker such as Redis; not needed for the pilot.
+Connections live in this process, so run a single server process (no --workers).
+Scaling out would need a broker such as Redis.
 """
 
 from __future__ import annotations
@@ -37,7 +32,7 @@ class Hub:
                 self.leave(channel, ws)
 
     async def publish(self, event: dict[str, Any]) -> None:
-        """Send an event to its kiosk and to the phone in its session."""
+        """Send to the event's kiosk and, if any, its session's phone."""
         await self.send(f"kiosk:{event['kioskId']}", event)
         if event.get("sessionId"):
             await self.send(f"session:{event['sessionId']}", event)

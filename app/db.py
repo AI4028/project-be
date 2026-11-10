@@ -1,7 +1,4 @@
-"""Database connection (SQLAlchemy 2.0).
-
-SQLite locally, PostgreSQL in production; the code is the same for both.
-"""
+"""Database engine and sessions. SQLite locally, PostgreSQL in production."""
 
 from __future__ import annotations
 
@@ -23,8 +20,8 @@ def make_engine(url: str, **kwargs) -> Engine:
         kwargs.setdefault("connect_args", {"check_same_thread": False, "timeout": 15})
         engine = create_engine(url, **kwargs)
 
-        # SQLite: start every transaction with BEGIN IMMEDIATE so requests run
-        # one at a time and never read data another request is changing.
+        # Every transaction takes the write lock up front (BEGIN IMMEDIATE), so
+        # requests run one at a time and never read rows another is changing.
         @event.listens_for(engine, "connect")
         def _no_autobegin(dbapi_conn, _record):
             dbapi_conn.isolation_level = None
@@ -42,12 +39,12 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
 def get_db() -> Iterator[Session]:
-    """FastAPI dependency: one database session per request."""
+    """One session per request."""
     with SessionLocal() as db:
         yield db
 
 
 def create_tables(bind: Engine | None = None) -> None:
-    from app import models  # noqa: F401  (registers the tables)
+    from app import models  # noqa: F401  registers the tables
 
     Base.metadata.create_all(bind or engine)

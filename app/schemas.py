@@ -1,4 +1,4 @@
-"""Request bodies. JSON uses camelCase (e.g. "kioskId") to match the apps."""
+"""Request bodies, camelCase on the wire."""
 
 from __future__ import annotations
 
@@ -18,9 +18,7 @@ class ConnectIn(CamelModel):
 
 
 class CartIn(CamelModel):
-    # [{"itemId": "americano", "qty": 1, "options": {"temp": "ice", "extra": ["shot"]}}]
-    # Checked in app/logic.py so errors come back with specific codes.
-    items: list[Any]
+    items: list[Any]  # validated in logic.build_order_lines for specific error codes
 
 
 class OrderIn(CamelModel):

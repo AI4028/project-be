@@ -1,11 +1,7 @@
-"""Errors the apps can understand.
+"""Error responses: {"error": "<code>", "message": "..."}.
 
-Every error response has the same JSON shape:
-
-    {"error": "kiosk-busy", "message": "Someone else is using this kiosk..."}
-
-`error` is a stable code the phone app maps to a Korean message for the
-screen reader; `message` is an English fallback for developers.
+`error` is a stable code the app maps to a Korean screen-reader message;
+`message` is an English fallback for developers.
 """
 
 from __future__ import annotations
@@ -22,7 +18,7 @@ class AppError(Exception):
         self.message = message
 
 
-# HTTP status per error code (anything not listed is 400 Bad Request).
+# HTTP status per code; anything else is 400.
 _STATUS = {
     "not-signed-in": 401,
     "not-kiosk": 401,
