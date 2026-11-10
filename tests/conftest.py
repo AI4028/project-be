@@ -1,9 +1,12 @@
-"""Test setup: a fresh SQLite database per test, the demo cafe loaded, a
-kiosk key issued, and a clock the tests can move forward."""
+"""Test setup: a fresh database per test, the demo cafe loaded, a kiosk key
+issued, and a clock the tests can move forward.
+
+SQLite by default. Set TEST_DATABASE_URL to run against Postgres."""
 
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -43,10 +46,11 @@ class Clock:
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
-    engine = dbmod.make_engine(f"sqlite:///{tmp_path / 'test.db'}")
+    engine = dbmod.make_engine(os.getenv("TEST_DATABASE_URL") or f"sqlite:///{tmp_path / 'test.db'}")
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     monkeypatch.setattr(dbmod, "engine", engine)
     monkeypatch.setattr(dbmod, "SessionLocal", session_factory)
+    dbmod.Base.metadata.drop_all(engine)  # a shared Postgres keeps the last test's rows
     dbmod.create_tables(engine)
     with session_factory() as db:
         load_store(db, SEED)

@@ -46,8 +46,9 @@ ask "Could you get in?" after each order.
 
 ## Map provider
 
-Kakao Maps has the best Korean place data. It needs a Kakao developer app key
-with our domain registered. Leaflet with OpenStreetMap works without a key.
+- Web: Kakao Maps, the best Korean place data. The JavaScript key needs
+  `https://galjido.shop` registered in the Kakao developer console.
+- Android: Google Maps SDK, with a key restricted to the app.
 
 ## Open questions
 

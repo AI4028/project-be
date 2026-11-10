@@ -29,6 +29,14 @@ Tests:
 .\.venv\Scripts\python.exe -m pytest
 ```
 
+CI also runs them on Postgres. Locally, with Docker:
+
+```powershell
+docker run -d --name galjido-pg -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=galjido_test -p 5432:5432 postgres:17
+$env:TEST_DATABASE_URL = "postgresql+psycopg://postgres:postgres@127.0.0.1:5432/galjido_test"
+.\.venv\Scripts\python.exe -m pytest
+```
+
 ## How it works
 
 1. The kiosk calls `POST /kiosk/heartbeat` every ~30 s and broadcasts the token over Bluetooth. Tokens expire after 60 s.
