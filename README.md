@@ -1,12 +1,13 @@
-# Project Backend
+# Galjido Backend
 
-FastAPI backend for accessible kiosk ordering. A phone finds a kiosk over
-Bluetooth, connects to it, and orders from an accessible phone screen; the
-kiosk shows the cart and the order live. Requires Python 3.10 or newer.
+FastAPI backend for Galjido (갈지도): accessible store info and phone-based kiosk ordering.
 
-## Run locally (Windows PowerShell)
+A phone finds a kiosk over Bluetooth, pairs with it, and orders from an
+accessible phone screen. The kiosk shows the cart and the order live.
 
-From the repository folder:
+## Quickstart
+
+Python 3.10+. Windows PowerShell, from the repo folder:
 
 ```powershell
 python -m venv .venv
@@ -17,17 +18,12 @@ python -m venv .venv
 ```
 
 - `scripts.seed` loads the demo cafe (menu, accessibility info, kiosk GK01).
-- `scripts.create_kiosk` prints the kiosk's secret key **once**; save it for the kiosk app.
-- Data is stored in `linkage.db` (SQLite) in the project folder. Delete it to start over.
+- `scripts.create_kiosk` prints the kiosk key once. Save it.
+- Data lives in `galjido.db` (SQLite). Delete it to start over.
 
-Using the virtual environment Python directly does not require activating it.
-In VS Code, select `.venv\Scripts\python.exe` as your Python interpreter.
+Open http://127.0.0.1:8000/docs to try every endpoint.
 
-- App: http://127.0.0.1:8000/
-- Health check: http://127.0.0.1:8000/health
-- Interactive API documentation: http://127.0.0.1:8000/docs (try every endpoint here)
-
-Run the tests:
+Tests:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest
@@ -35,194 +31,47 @@ Run the tests:
 
 ## How it works
 
-```text
-Phone app  --Bluetooth-->  Kiosk app (broadcasts kiosk ID + pairing token)
-    |                          |
-    |  HTTP + WebSocket        |  HTTP + WebSocket
-    v                          v
-            FastAPI backend  -->  database
-```
-
-1. The kiosk calls `POST /kiosk/heartbeat` every ~30 s and broadcasts the
-   returned token over Bluetooth. Tokens expire after 60 s.
-2. The phone hears it and calls `POST /sessions` with the kiosk ID and token.
-   Only a phone standing at the kiosk can know a current token. One phone per
-   kiosk at a time; a phone idle for 10 minutes is disconnected.
-3. The phone sends its cart (`PUT /sessions/{id}/cart`); the server prices it
-   from the real menu and the kiosk screen updates live.
-4. The phone places the order; it gets a number (#1, #2… restarting daily,
-   Korea time) and appears on the kiosk.
-5. Staff move it through `accepted → preparing → ready → picked_up`; the phone
-   is told at each step.
+1. The kiosk calls `POST /kiosk/heartbeat` every ~30 s and broadcasts the token over Bluetooth. Tokens expire after 60 s.
+2. The phone hears it and calls `POST /sessions`. Only a phone at the kiosk knows a fresh token.
+3. The phone sends its cart. The server prices it from the real menu and the kiosk updates live.
+4. The phone places the order and gets a daily number (#1, #2, ... reset at midnight KST).
+5. Staff move it through `accepted → preparing → ready → picked_up`. The phone hears each step.
 
 ## Structure
 
 ```text
-app/
-  main.py          # Application, routers, root and health routes
-  config.py        # Settings (DATABASE_URL, CORS, DEMO_MODE, timeouts, limits)
-  db.py            # Database connection
-  models.py        # Tables: stores, kiosks, devices, sessions, orders
-  logic.py         # Pure rules: pricing, tokens, order status (no database)
-  service.py       # Ordering logic using the database
-  auth.py          # Phone device tokens and kiosk keys
-  realtime.py      # Live updates to connected WebSockets
-  schemas.py       # Request bodies
-  errors.py        # Error codes and JSON error format
-  routers/
-    public.py      # GET /stores, /stores/nearby, /stores/{id}, /kiosks/{id}
-    phone.py       # Phone app endpoints
-    kiosk.py       # Kiosk app endpoints
-    ws.py          # WebSocket live updates
-    demo.py        # Demo-only shortcuts (off unless DEMO_MODE=1)
-scripts/
-  seed.py          # Load a store from a JSON file
-  create_kiosk.py  # Issue a kiosk key
-hardware/
-  galjido_kiosk_beacon/  # Arduino + ZS-040 Bluetooth beacon at the kiosk
-  change_bt_name/        # Tool to rename the Bluetooth module
-  bt_bridge.py           # Reads the beacon over a COM port, posts to /proximity
-seed/gist-cafe.json  # Demo cafe (placeholder prices and accessibility info)
-tests/             # pytest: rules and full API flow
-requirements.txt   # Runtime dependencies
-requirements-dev.txt  # + test tools
+app/          FastAPI app
+  routers/    public, phone, kiosk, ws, demo
+scripts/      seed data, issue kiosk keys
+seed/         demo store (JSON)
+hardware/     Arduino Bluetooth beacon + serial bridge
+tests/        pytest
+docs/         overview, map, hardware, API, roadmap
 ```
 
-The web frontend lives in its own repository. It calls this API from another
-origin, which CORS allows (`CORS_ORIGINS`, default `*`). To serve a frontend
-build from this server at `/app` instead, set `FRONTEND_DIR` to its folder.
+The web frontend lives in its own repo and calls this API cross-origin (`CORS_ORIGINS`).
 
-## Demo mode (web prototype and Arduino beacon)
+## Demo mode
 
-Normally a phone can only connect to a kiosk by hearing the kiosk's rotating
-Bluetooth token, which proves it is standing there. Web browsers mostly cannot
-read that broadcast, so for demos the server has shortcuts:
-
-| Method and path | What it does |
-| --- | --- |
-| `GET /kiosks/{id}/token` | The kiosk's current pairing token (as if heard over Bluetooth) |
-| `POST /proximity` | `distance`, `storeName`?, `kioskId`?, `rssi`?: a beacon distance reading |
-| `ws://HOST/ws/proximity` | Every proximity reading, live |
-
-They let **anyone** pair with a kiosk remotely, so they are off (404, and the
-WebSocket closes with 4404) unless the server is started with `DEMO_MODE=1`:
+Browsers can't read the kiosk's Bluetooth broadcast, so demo mode adds shortcuts
+(`GET /kiosks/{id}/token`, `POST /proximity`, `ws://HOST/ws/proximity`).
+They let anyone pair remotely, so they are off unless:
 
 ```powershell
 $env:DEMO_MODE = "1"; .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0
 ```
 
-With the Arduino beacon paired to Windows as a COM port, run the bridge in a
-second terminal: `pip install -r hardware/requirements.txt`, then
-`python hardware/bt_bridge.py COM4` (set `BACKEND_URL` if the server is not on
-`http://127.0.0.1:8000`).
-
 Never enable demo mode on a real deployment.
 
-## API for the apps
+Arduino beacon setup: [docs/hardware.md](docs/hardware.md).
 
-JSON uses camelCase. Full, clickable list at `/docs`.
+## Docs
 
-### Who is calling
+- [Overview](docs/overview.md)
+- [Map](docs/map.md)
+- [Hardware](docs/hardware.md)
+- [API reference](docs/api.md)
+- [Roadmap](docs/roadmap.md)
+- [Contributing](CONTRIBUTING.md)
 
-- **Phone:** on first launch call `POST /devices` → `{"deviceId", "token"}`. Store
-  the token (Keychain) and send `Authorization: Bearer dev_...` on every call.
-  No sign-up.
-- **Kiosk:** send `Authorization: Bearer ksk_...` (from `scripts.create_kiosk`).
-
-### Bluetooth advertisement (kiosk → phone)
-
-The kiosk broadcasts `"LK" + kioskId (4 chars) + token (8 chars)`, e.g.
-`LKGK017H3KQ9ZC`. The phone strips `LK`, splits the rest into kiosk ID and
-token, and calls `POST /sessions`. (The exact BLE field depends on whether the
-kiosk is an iPad or an Android tablet; to be decided with the app team.)
-
-### Phone endpoints
-
-| Method and path | Body | What it does |
-| --- | --- | --- |
-| `POST /devices` | — | Get an anonymous device token |
-| `GET /stores`, `GET /stores/{id}` | — | Store info, accessibility, menu |
-| `GET /stores/nearby?lat=&lng=&radiusM=` | — | Stores within `radiusM` (default 2000) for the map, nearest first, each with `distanceM` and `insideGeofence` |
-| `POST /sessions` | `kioskId`, `token` | Connect to a kiosk → `sessionId` |
-| `GET /sessions/{id}` | — | Connection status and cart |
-| `PUT /sessions/{id}/cart` | `items` | Update the cart shown on the kiosk |
-| `POST /sessions/{id}/order` | `items`, `paymentMethod`?, `note`? | Place the order → `orderId`, `orderNumber` |
-| `POST /sessions/{id}/help` | — | Ask staff for help |
-| `POST /sessions/{id}/end` | — | Disconnect |
-| `GET /orders/{id}` | — | Order status |
-| `POST /orders/{id}/cancel` | — | Cancel before staff accepts |
-
-`items` example (prices are never sent; the server computes them):
-
-```json
-[{"itemId": "americano", "qty": 1, "options": {"temp": "ice", "size": "large", "extra": ["shot"]}}]
-```
-
-`paymentMethod` is `counter` (default) or `kiosk`: payment happens there.
-
-### Kiosk endpoints
-
-| Method and path | Body | What it does |
-| --- | --- | --- |
-| `POST /kiosk/heartbeat` | — | Get the Bluetooth token; call again after `refreshInMs` |
-| `GET /kiosk/session` | — | The connected phone and its cart, or `null` |
-| `GET /kiosk/orders?status=` | — | Today's orders, newest first |
-| `POST /kiosk/orders/{id}/status` | `status` | `accepted`, `preparing`, `ready`, `picked_up`, `cancelled` |
-| `POST /kiosk/sessions/{id}/resolve-help` | — | Staff handled the help request |
-| `POST /kiosk/sessions/{id}/end` | — | Disconnect the phone |
-| `PUT /kiosk/menu/{itemId}/availability` | `available` | Mark sold out / back in stock |
-
-### Live updates (WebSocket)
-
-- Kiosk: `ws://HOST/ws/kiosk?token=ksk_...`
-- Phone: `ws://HOST/ws/sessions/{sessionId}?token=dev_...`
-
-Each message is a JSON event with a `type`: `connected`, `cart`, `ordered`,
-`help`, `help_resolved`, `order_status`, `ended`. Both the kiosk and the phone
-in that session receive every event. A refused connection closes with code
-4401 (bad token) or 4403 (not your session).
-
-### Errors
-
-Every error is `{"error": "<code>", "message": "..."}`. Map codes to Korean
-messages the screen reader can read:
-
-| Code | HTTP | Meaning |
-| --- | --- | --- |
-| `token-invalid` | 403 | Too far from the kiosk or token expired: move closer and rescan |
-| `kiosk-busy` | 409 | Another phone is using this kiosk |
-| `session-expired`, `session-not-found` | 409, 404 | Connection ended: reconnect |
-| `item-unavailable`, `choice-unavailable` | 409 | Sold out |
-| `missing-option` | 400 | A required option (e.g. size) was not chosen |
-| `too-late-to-cancel` | 409 | Staff already started the order |
-| `not-signed-in`, `not-kiosk` | 401 | Missing or wrong token |
-| `bad-request`, `bad-qty`, `unknown-item`, … | 400, 404 | App bug: invalid request |
-
-## Deploying (later)
-
-- Set `DATABASE_URL` to PostgreSQL (e.g. AWS RDS) and add a driver such as
-  `psycopg[binary]` to `requirements.txt`. The code works unchanged.
-- Run **one** server process (no `--workers`), because live updates are kept
-  in memory. Use a host that supports WebSockets (e.g. AWS EC2, Lightsail, or
-  Elastic Beanstalk).
-
-Keep secrets in a local `.env` file; it is ignored by Git.
-
-# Git merge convention
-
-want to work on a specific feature: create a feature/(name of the feature) branch (from branch develop):
-```
-git checkout -b feature/(name of the feature)
-```
-
-finished working, merge to develop:
-```
-git checkout develop
-git merge feature/(name of the feature)
-```
-
-merging into main is only after develop passess all the checks:
-```
-git checkout main
-git merge develop
-```
+Settings come from environment variables. See [.env.example](.env.example).
