@@ -98,8 +98,11 @@ messages the screen reader can read.
 
 ## Deploying
 
-- Set `DATABASE_URL` to PostgreSQL and add a driver such as `psycopg[binary]`.
-  The code works unchanged.
+- Use Postgres: `DATABASE_URL=postgresql+psycopg://user:password@host:5432/galjido`.
+  Tables are created on first start. Then load the store and issue kiosk keys
+  with `scripts.seed` and `scripts.create_kiosk`, as in the quickstart.
+- Schema changes are not migrated: the app only creates missing tables. Until
+  there is data worth keeping, drop the tables and reseed.
 - Run **one** server process (no `--workers`): live updates are kept in memory.
   Use a host with WebSocket support (e.g. AWS EC2 or Lightsail).
 - Keep secrets in a local `.env`. It is ignored by Git.

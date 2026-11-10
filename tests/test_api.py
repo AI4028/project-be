@@ -260,6 +260,9 @@ def test_websocket_waiting_for_the_database_does_not_freeze_the_server(env):
 
     from app import db as database
 
+    if database.engine.dialect.name != "sqlite":
+        pytest.skip("holds a SQLite file lock")
+
     locked = threading.Event()
 
     def hold_lock():
