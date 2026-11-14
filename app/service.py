@@ -154,9 +154,8 @@ def connect_to_kiosk(db: Session, device: Device, kiosk_id: Any, token: Any, now
                 previous.last_active_at = now  # same phone reconnecting
                 return connected(previous.id)
             raise AppError("kiosk-busy", "Someone else is using this kiosk from their phone. Please wait a moment.")
-        if previous is not None and previous.status == "active":
-            previous.status = "expired"
-            previous.ended_at = now
+        # Cleanup expires the old session and emits its event. It checks the
+        # active-session pointer, so it cannot release this new connection.
 
         session = KioskSession(
             id=str(uuid.uuid4()),
@@ -427,7 +426,8 @@ def kiosk_orders(db: Session, kiosk: Kiosk, now: int, status: str | None = None)
 
 def set_item_availability(db: Session, kiosk: Kiosk, item_id: str, available: bool) -> dict[str, Any]:
     def run() -> dict[str, Any]:
-        store = db.get(Store, kiosk.store_id, populate_existing=True)
+        store = db.scalar(select(Store).where(Store.id == kiosk.store_id)
+                          .with_for_update().execution_options(populate_existing=True))
         if store is None:
             raise AppError("store-not-found", "Store not found.")
         menu = [dict(m) for m in store.menu or []]

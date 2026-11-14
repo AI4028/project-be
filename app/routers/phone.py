@@ -18,8 +18,19 @@ from app.models import Device
 from app.limits import registration_limit, pairing_limit
 from app.realtime import hub
 from app.schemas import CartIn, ConnectIn, OrderIn
+from app.responses import PhoneState
+from app.routers.public import get_store
 
 router = APIRouter(tags=["phone"])
+
+
+@router.get("/sessions/{session_id}/state", response_model=PhoneState, response_model_exclude_unset=True)
+def phone_state(session_id: str, device: Device = Depends(current_device),
+                db: Session = Depends(get_db), now: int = Depends(get_now)):
+    """Restore session, order and menu after a connection gap."""
+    session = service.get_my_session(db, device, session_id, now)
+    order = service.get_my_order(db, device, session["orderId"]) if session["orderId"] else None
+    return {"session": session, "order": order, "store": get_store(session["storeId"], db)}
 
 
 @router.delete("/devices/me")

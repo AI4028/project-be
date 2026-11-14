@@ -21,16 +21,18 @@ UNAUTHORIZED = 4401
 FORBIDDEN = 4403
 
 
-async def listen(ws: WebSocket, channel: str) -> None:
+async def listen(ws: WebSocket, *channels: str) -> None:
     await ws.accept()
-    hub.join(channel, ws)
+    for channel in channels:
+        hub.join(channel, ws)
     try:
         while True:
             await ws.receive_text()  # ignore client pings
     except WebSocketDisconnect:
         pass
     finally:
-        hub.leave(channel, ws)
+        for channel in channels:
+            hub.leave(channel, ws)
 
 
 # Token checks hit the database, so they run in a thread. On the event loop,
@@ -38,13 +40,13 @@ async def listen(ws: WebSocket, channel: str) -> None:
 # that holds the lock.
 
 
-def _kiosk_channel(token: str) -> str | None:
+def _kiosk_channel(token: str) -> tuple[str, str] | None:
     with database.SessionLocal() as db:
         kiosk = kiosk_for_key(db, token)
-        return f"kiosk:{kiosk.id}" if kiosk else None
+        return (f"kiosk:{kiosk.id}", f"store:{kiosk.store_id}") if kiosk else None
 
 
-def _session_channel(session_id: str, token: str) -> str | int:
+def _session_channel(session_id: str, token: str) -> tuple[str, str] | int:
     """The channel to listen on, or the close code if refused."""
     with database.SessionLocal() as db:
         device = device_for_token(db, token)
@@ -53,7 +55,7 @@ def _session_channel(session_id: str, token: str) -> str | int:
         session = db.get(KioskSession, session_id)
         if session is None or session.device_id != device.id:
             return FORBIDDEN
-        return f"session:{session_id}"
+        return (f"session:{session_id}", f"store:{session.store_id}")
 
 
 @router.websocket("/ws/kiosk")
@@ -62,7 +64,7 @@ async def kiosk_events(ws: WebSocket, token: str = "") -> None:
     if channel is None:
         await ws.close(code=UNAUTHORIZED)
         return
-    await listen(ws, channel)
+    await listen(ws, *channel)
 
 
 @router.websocket("/ws/sessions/{session_id}")
@@ -71,4 +73,4 @@ async def session_events(ws: WebSocket, session_id: str, token: str = "") -> Non
     if isinstance(channel, int):
         await ws.close(code=channel)
         return
-    await listen(ws, channel)
+    await listen(ws, *channel)

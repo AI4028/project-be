@@ -2,6 +2,8 @@ from app import config, service
 from app.models import Kiosk, KioskSession
 from tests.test_api import new_phone, connect
 from sqlalchemy.exc import OperationalError
+import pytest
+from starlette.websockets import WebSocketDisconnect
 
 
 def test_idle_session_reads_expired_and_cleanup_releases_kiosk_once(env):
@@ -62,3 +64,46 @@ def test_revocation_rejects_token_and_releases_kiosk(env):
     assert env.client.get(f'/sessions/{sid}', headers=phone).status_code == 401
     assert env.client.get('/kiosk/session', headers=env.kiosk).json() is None
     assert connect(env, new_phone(env)).status_code == 201
+
+
+def test_reconnect_snapshot_and_live_stock_update(env):
+    phone = new_phone(env)
+    sid = connect(env, phone).json()['sessionId']
+    token = phone['Authorization'].split()[1]
+    with env.client.websocket_connect(f'/ws/sessions/{sid}?token={token}') as ws:
+        response = env.client.put('/kiosk/menu/americano/availability',
+                                  json={'available': False}, headers=env.kiosk)
+        assert response.status_code == 200
+        event = ws.receive_json()
+        assert event == {'type': 'availability', 'storeId': 'gist-cafe',
+                         'itemId': 'americano', 'available': False}
+    state = env.client.get(f'/sessions/{sid}/state', headers=phone).json()
+    assert state['session']['sessionId'] == sid
+    assert state['order'] is None
+    assert next(item for item in state['store']['menu'] if item['id'] == 'americano')['available'] is False
+    assert env.client.get(f'/sessions/{sid}/state', headers=new_phone(env)).status_code == 404
+    kiosk_state = env.client.get('/kiosk/state', headers=env.kiosk).json()
+    assert kiosk_state['session']['sessionId'] == sid
+    assert env.client.get('/kiosk/state', headers=env.other_kiosk).json()['session'] is None
+
+
+def test_idle_takeover_still_emits_expiry_without_releasing_new_phone(env):
+    old_sid = connect(env, new_phone(env)).json()['sessionId']
+    env.clock.advance(config.SESSION_IDLE_MS)
+    new_sid = connect(env, new_phone(env)).json()['sessionId']
+    with env.db() as db:
+        events = service.expire_sessions(db, env.clock.now)
+        assert [e['sessionId'] for e in events] == [old_sid]
+        assert db.get(Kiosk, 'GK01').active_session_id == new_sid
+
+
+def test_revocation_closes_existing_phone_socket(env):
+    phone = new_phone(env)
+    sid = connect(env, phone).json()['sessionId']
+    token = phone['Authorization'].split()[1]
+    with env.client.websocket_connect(f'/ws/sessions/{sid}?token={token}') as ws:
+        assert env.client.delete('/devices/me', headers=phone).status_code == 200
+        assert ws.receive_json()['type'] == 'ended'
+        with pytest.raises(WebSocketDisconnect) as exc:
+            ws.receive_json()
+        assert exc.value.code == 4401

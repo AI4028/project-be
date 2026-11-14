@@ -15,8 +15,19 @@ from app.db import get_db
 from app.models import Kiosk
 from app.realtime import hub
 from app.schemas import AvailabilityIn, StatusIn
+from app.responses import KioskState
+from app.routers.public import get_store
 
 router = APIRouter(prefix="/kiosk", tags=["kiosk"])
+
+
+@router.get("/state", response_model=KioskState, response_model_exclude_unset=True)
+def kiosk_state(kiosk: Kiosk = Depends(current_kiosk), db: Session = Depends(get_db),
+                now: int = Depends(get_now)):
+    """Restore the screen after reconnecting, including missed stock changes."""
+    return {"session": service.kiosk_active_session(db, kiosk, now),
+            "orders": service.kiosk_orders(db, kiosk, now),
+            "store": get_store(kiosk.store_id, db)}
 
 
 @router.post("/heartbeat", response_model=TokenOut, response_model_exclude_unset=True)
@@ -88,7 +99,10 @@ def end_phone_session(
 
 @router.put("/menu/{item_id}/availability", response_model=AvailabilityOut, response_model_exclude_unset=True)
 def set_availability(
-    item_id: str, body: AvailabilityIn, kiosk: Kiosk = Depends(current_kiosk), db: Session = Depends(get_db)
+    item_id: str, body: AvailabilityIn, background: BackgroundTasks, kiosk: Kiosk = Depends(current_kiosk), db: Session = Depends(get_db)
 ) -> dict[str, Any]:
     """Mark an item sold out or back in stock."""
-    return service.set_item_availability(db, kiosk, item_id, body.available)
+    result = service.set_item_availability(db, kiosk, item_id, body.available)
+    background.add_task(hub.send, f"store:{kiosk.store_id}",
+                        {"type": "availability", "storeId": kiosk.store_id, **result})
+    return result

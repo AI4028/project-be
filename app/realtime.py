@@ -7,6 +7,7 @@ Scaling out would need a broker such as Redis.
 from __future__ import annotations
 
 from collections import defaultdict
+import asyncio
 from typing import Any
 
 from fastapi import WebSocket
@@ -27,7 +28,7 @@ class Hub:
     async def send(self, channel: str, message: dict[str, Any]) -> None:
         for ws in list(self._channels.get(channel, ())):
             try:
-                await ws.send_json(message)
+                await asyncio.wait_for(ws.send_json(message), timeout=5)
             except Exception:  # connection already closed
                 self.leave(channel, ws)
 
@@ -41,6 +42,8 @@ class Hub:
         for ws in list(self._channels.get(channel, ())):
             try:
                 await ws.close(code=4401)
+            except Exception:
+                pass  # Already disconnected; still remove its subscription.
             finally:
                 self.leave(channel, ws)
 

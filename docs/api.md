@@ -44,6 +44,7 @@ Functions: [phone.py](../app/routers/phone.py). Phone auth required except regis
 | `DELETE /devices/me` | `revoke_device` | Revokes the current phone token, releases its active kiosks and closes its sockets. |
 | `POST /devices` | `register_device` | No body → anonymous `deviceId` and `token`; no sign-up. |
 | `POST /sessions` | `connect` | `kioskId`, `token` → `connected` event with `sessionId`, store and kiosk details. |
+| `GET /sessions/{session_id}/state` | `phone_state` | Own session, order (or `null`) and current store/menu for reconnect recovery. |
 | `GET /sessions/{session_id}` | `get_session` | No body → own session: status, cart, help flag, order ID and last activity time. |
 | `PUT /sessions/{session_id}/cart` | `update_cart` | `items` → replaces the cart; returns `cart` event with priced `lines`, `total`, `summary`. `[]` clears it. |
 | `POST /sessions/{session_id}/order` | `place_order` | `items`, optional `paymentMethod`, `note` → `ordered` event with `orderId`, `orderNumber`, total and status. Frees the kiosk. |
@@ -79,6 +80,7 @@ Functions: [kiosk.py](../app/routers/kiosk.py). Kiosk auth required.
 | Endpoint | Function | Input → result |
 | --- | --- | --- |
 | `POST /kiosk/heartbeat` | `heartbeat` | No body → `kioskId`, pairing `token`, `expiresAtMs`, `refreshInMs`. Call again after `refreshInMs`. |
+| `GET /kiosk/state` | `kiosk_state` | Active session, today's store orders and current store/menu. |
 | `GET /kiosk/session` | `active_session` | No body → active phone session and cart, or `null`. |
 | `GET /kiosk/orders` | `todays_orders` | Optional `?status=submitted` → today's orders for the kiosk's **store**, newest first. |
 | `POST /kiosk/orders/{order_id}/status` | `set_order_status` | `{"status":"accepted"}` → updates an order in this store; returns `order_status` event. |
@@ -127,8 +129,8 @@ kiosk and session sockets. Events contain `type`, `kioskId`, `sessionId`,
 | `ended` | Session `status` |
 
 Sockets send future events only. After connecting/reconnecting, fetch current
-state through HTTP. Client messages are ignored. Stock changes have no event;
-refetch the menu. Rejections use `4401` (bad token) or `4403` (missing session
+state through HTTP. Client messages are ignored. Stock changes send `availability` with `storeId`, `itemId`, `available` to
+all connected phones and kiosks in that store. Rejections use `4401` (bad token) or `4403` (missing session
 or wrong owner).
 
 ## Demo endpoints
@@ -172,3 +174,8 @@ Next steps: [roadmap](roadmap.md).
 Registration is limited to 30 requests/minute per peer IP; pairing to 60.
 A limit returns HTTP `429` with `Retry-After` and a `detail` message. Limits are
 process-local and reset on restart. Configure trusted proxies in the ASGI server.
+
+Reconnect: open the socket, then fetch `/kiosk/state` or
+`/sessions/{session_id}/state`. Treat events as notifications to refetch state,
+including events received while a fetch is in flight. Retry failed fetches.
+Snapshots recover missed updates; historical events are not replayed.

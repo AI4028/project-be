@@ -150,3 +150,15 @@ class AvailabilityOut(CamelModel):
 class ProximityOut(CamelModel):
     status: Literal['ok']
     distance: float
+
+
+class KioskState(CamelModel):
+    session: SessionOut | None
+    orders: list[OrderOut]
+    store: StoreOut
+
+
+class PhoneState(CamelModel):
+    session: SessionOut
+    order: OrderOut | None
+    store: StoreOut
