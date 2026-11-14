@@ -465,3 +465,26 @@ def set_item_availability(db: Session, kiosk: Kiosk, item_id: str, available: bo
         return {"itemId": item_id, "available": available}
 
     return transact(db, run)
+
+
+def revoke_device(db: Session, device: Device, now: int):
+    """Invalidate a phone token and release its sessions in one transaction."""
+    from app.auth import hash_token, new_device_token
+
+    def run():
+        db.refresh(device)
+        device.token_hash = hash_token(new_device_token())
+        events, ids = [], []
+        for session in db.scalars(select(KioskSession).where(KioskSession.device_id == device.id)
+                                  .with_for_update().execution_options(populate_existing=True)):
+            ids.append(session.id)
+            if session.status == "active":
+                session.status = "ended"
+                session.ended_at = now
+                kiosk = db.get(Kiosk, session.kiosk_id, populate_existing=True)
+                if kiosk and kiosk.active_session_id == session.id:
+                    kiosk.active_session_id = None
+                events.append(event("ended", session.kiosk_id, now, sessionId=session.id,
+                                            storeId=session.store_id, status="ended"))
+        return events, ids
+    return transact(db, run)

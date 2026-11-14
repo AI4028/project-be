@@ -9,9 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.responses import CartEvent, Connected, DeviceOut, Ended, HelpEvent, OrderEvent, OrderOut, Ordered, SessionOut
 from app import service
-from app.auth import create_device, current_device, hash_token, new_device_token
-from sqlalchemy import select
-from app.models import KioskSession, Kiosk
+from app.auth import create_device, current_device
 from app.clock import get_now
 from app.db import get_db
 from app.models import Device
@@ -37,23 +35,7 @@ def phone_state(session_id: str, device: Device = Depends(current_device),
 def revoke_device(background: BackgroundTasks, device: Device = Depends(current_device),
                   db: Session = Depends(get_db), now: int = Depends(get_now)):
     """Revoke this token, release active kiosks, and close this phone's sockets."""
-    def run():
-        db.refresh(device)
-        device.token_hash = hash_token(new_device_token())
-        events, ids = [], []
-        for session in db.scalars(select(KioskSession).where(KioskSession.device_id == device.id)
-                                  .with_for_update().execution_options(populate_existing=True)):
-            ids.append(session.id)
-            if session.status == "active":
-                session.status = "ended"
-                session.ended_at = now
-                kiosk = db.get(Kiosk, session.kiosk_id, populate_existing=True)
-                if kiosk and kiosk.active_session_id == session.id:
-                    kiosk.active_session_id = None
-                events.append(service.event("ended", session.kiosk_id, now, sessionId=session.id,
-                                            storeId=session.store_id, status="ended"))
-        return events, ids
-    events, ids = service.transact(db, run)
+    events, ids = service.revoke_device(db, device, now)
     for event in events:
         background.add_task(hub.publish, event)
     for sid in ids:

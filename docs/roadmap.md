@@ -4,8 +4,9 @@ The backend has store lookup, nearby search, anonymous phone auth, pairing,
 cart pricing, orders, staff help, stock toggles and live updates. Tests cover
 the core flow; CI is configured for SQLite and Postgres.
 
-This list is based on this repo. Frontend completion still needs checking
-in its own repo.
+Backend follow-up work below is implemented. Frontend checkout and reconnect
+integration is on `feature/ordering-readiness` in the adjacent
+`project-fe-readiness` checkout (branched from frontend `develop`).
 
 ## Before the pilot
 
@@ -38,4 +39,12 @@ in its own repo.
 
 The frontend review identified two additional blockers. Backend support is now
 in place: persistent idempotent order retries and server-validated price quotes.
-Frontend adoption and its tests are in progress.
+Frontend adoption, typechecking, unit tests and web export pass.
+
+## Still needs real-world verification
+
+Hardware integration, verified cafe details, and real-device accessibility/permission
+checks remain. Automated checks do not establish these. Postgres could not be run
+locally because Docker Desktop's engine is stopped; CI still runs the API suite on it.
+Online payments, push notifications and help after ordering remain optional product
+extensions, not implemented services.
