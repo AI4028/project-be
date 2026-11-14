@@ -162,7 +162,7 @@ Full rules: [logic.py](../app/logic.py). Error mapping: [errors.py](../app/error
 ## Running it
 
 - SQLite locally; set `DATABASE_URL` for Postgres and `CORS_ORIGINS` for allowed browser origins.
-- Startup creates missing tables; it does not migrate existing schemas.
+- Run [database migrations](migrations.md) before deployment; startup only creates missing tables.
 - Run one server process: WebSocket subscriptions are held in memory.
 - Settings come from environment variables. `.env` is not loaded automatically.
 - Optional `FRONTEND_DIR` serves a built frontend at `/app`.

@@ -12,6 +12,7 @@ Python 3.10+. Windows PowerShell, from the repo folder:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m scripts.migrate
 .\.venv\Scripts\python.exe -m scripts.seed seed\gist-cafe.json
 .\.venv\Scripts\python.exe -m scripts.create_kiosk GK01
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
@@ -83,3 +84,5 @@ Arduino beacon setup: [docs/hardware.md](docs/hardware.md).
 - [Contributing](CONTRIBUTING.md)
 
 Settings come from environment variables. See [.env.example](.env.example).
+
+Existing database? Follow [migration adoption](docs/migrations.md) before upgrading.
