@@ -1,31 +1,35 @@
-# Roadmap
+# What we should work on
 
-## Features
+The backend has store lookup, nearby search, anonymous phone auth, pairing,
+cart pricing, orders, staff help, stock toggles and live updates. Tests cover
+the core flow; CI is configured for SQLite and Postgres.
 
-| Stage | Feature | Priority | Status |
-| --- | --- | --- | --- |
-| Access | Store accessibility info | Must | API done, map UI next |
-| Access | Geofence store detection | Must | API done, client next |
-| Ordering method | Ordering methods per store | Must | API done |
-| Ordering | Menu, prices and options on the phone | Must | Done |
-| Ordering | Phone-to-kiosk pairing, live orders | Must | Done, real Bluetooth pairing pending |
-| Ordering | Voice ordering | Should | Exploring |
-| Ordering method | In-store guidance to the kiosk | Should | Exploring (beacon prototype) |
+This list is based on this repo. Frontend completion still needs checking
+in its own repo.
 
-Must ships in the first release. Should comes after.
+## Before the pilot
 
-## Next
+| Priority | Task | Why / done when |
+| --- | --- | --- |
+| 1 | Fix the beacon → bridge format. | The sketch sends `STORE/KIOSK/TX/SEQ`; the bridge requires `DIST`, so it drops every current packet. Agree on the format and verify readings reach `/ws/proximity`. [Hardware](hardware.md#known-gaps) |
+| 2 | Finish real Bluetooth pairing. | The beacon does not send the rotating API token. Connect heartbeat → broadcast → phone scan → `POST /sessions`, and test on target phones with demo mode off. |
+| 3 | Replace the demo cafe data. | Prices, location and accessibility values are placeholders. Visit the store and update [gist-cafe.json](../seed/gist-cafe.json), including indoor directions. |
+| 4 | Verify the full phone and staff flow. | Connect the map/geofence, cart, help, order status and reconnect screens. Test screen readers, large text and contrast on real devices; measure time to order at the pilot cafe. |
 
-1. Map UI per disability type, with geofencing on the phone.
-2. Real data for the pilot cafe (replace the placeholders in `seed/gist-cafe.json`).
-3. Real Bluetooth pairing: the kiosk broadcasts its token.
-4. Accessibility pass on the UI: screen reader, magnification, contrast.
-5. Pilot at a GIST campus cafe, then stores in Seongsu, Seoul. Measure time to order.
+## Backend follow-up
 
-## Risks
+| Task | Current gap |
+| --- | --- |
+| Make session expiry explicit. | Idle checks reject actions, but no timer updates stored status or sends an expiry event. A session read can still say `active`. |
+| Add response schemas. | Most responses are generic dictionaries. Define the actual fields so `/docs` gives clients a useful response contract. |
+| Improve recovery after disconnects. | Events have no replay; clients must refetch state. Stock changes also need a live event if menus should update immediately. |
+| Add database migrations. | Startup creates missing tables only. Schema changes need a migration path before keeping pilot data. |
+| Add rate limits and device-token revocation. | Registration and pairing have no throttling; phone tokens have no expiry or revoke endpoint. |
+| Add a database readiness check. | `/health` only confirms the app responds. |
 
-- Bluetooth support varies by phone and browser.
-- Indoor proximity is noisy.
-- Store noise hurts voice input.
-- Accessibility data goes stale without a way to update it.
-- One phone per kiosk. A second phone gets `kiosk-busy`.
+## Later, if needed
+
+- Store/menu editing: currently done through the seed script, apart from item availability. Add staff editing and a way to keep accessibility details current.
+- Payments: `paymentMethod` only records a choice. Agree on the payment flow before adding payment processing.
+- Scaling: add a shared event broker before running multiple workers; add pagination and database-side nearby search as store/order counts grow.
+- Voice ordering and indoor guidance: still product work to explore and test in a noisy cafe.
