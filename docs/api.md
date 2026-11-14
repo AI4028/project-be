@@ -1,108 +1,194 @@
-# API Reference
+# API reference
 
-JSON uses camelCase. The live, clickable list is at `/docs` on a running server.
+Galjido serves store accessibility info and lets a phone pair with a kiosk,
+build a cart, ask for help and place an order. Staff manage orders from the kiosk.
+
+Local URL: `http://127.0.0.1:8000`. Try requests at `/docs`; `/redoc` and
+`/openapi.json` are also available. Setup: [README](../README.md#quickstart).
+
+JSON uses camelCase. Prices are whole Korean won; timestamps use Unix milliseconds.
+Success is `200`, except registration, pairing and order submission (`201`).
 
 ## Auth
 
-- **Phone:** on first launch call `POST /devices` → `{"deviceId", "token"}`.
-  Store the token (Keychain) and send `Authorization: Bearer dev_...`. No sign-up.
-- **Kiosk:** send `Authorization: Bearer ksk_...` (from `scripts.create_kiosk`).
+- **Public:** no token, including `POST /devices`.
+- **Phone:** register once, save the token, then send `Authorization: Bearer dev_...`.
+- **Kiosk:** send `Authorization: Bearer ksk_...`. Issue a key with `python -m scripts.create_kiosk GK01` after seeding. Running it again replaces the key.
+
+The short Bluetooth pairing token is separate from these auth tokens.
+
+## Public endpoints
+
+Functions: [main.py](../app/main.py), [public.py](../app/routers/public.py).
+
+| Endpoint | Function | What it does / returns |
+| --- | --- | --- |
+| `GET /` | `read_root` | `{"message":"Galjido API is running"}`. |
+| `GET /ready` | `readiness_check` | Database/schema readiness: `200` or `503`, without connection details. |
+| `GET /health` | `health_check` | `{"status":"ok"}`. Does not check the database. |
+| `GET /stores` | `list_stores` | All stores, sorted by name, without menus. |
+| `GET /stores/nearby` | `nearby_stores` | Required `lat`, `lng`; optional `radiusM` (default 2000, range 1–20000). Stores without menus, nearest first, with `distanceM` and `insideGeofence`. |
+| `GET /stores/{store_id}` | `get_store` | One store with accessibility info, ordering methods, kiosk features, indoor directions and full menu. |
+| `GET /kiosks/{kiosk_id}` | `get_kiosk` | `kioskId`, `storeId`, `name`, `nameEn`. |
+
+Nearby search accepts latitude −90 to 90 and longitude −180 to 180.
+It uses the location sent by the client; it does not track the phone.
+
+## Phone endpoints
+
+Functions: [phone.py](../app/routers/phone.py). Phone auth required except registration.
+“No body” means no JSON body is needed.
+
+| Endpoint | Function | Input → result |
+| --- | --- | --- |
+| `DELETE /devices/me` | `revoke_device` | Revokes the current phone token, releases its active kiosks and closes its sockets. |
+| `POST /devices` | `register_device` | No body → anonymous `deviceId` and `token`; no sign-up. |
+| `POST /sessions` | `connect` | `kioskId`, `token` → `connected` event with `sessionId`, store and kiosk details. |
+| `GET /sessions/{session_id}/state` | `phone_state` | Own session, order (or `null`) and current store/menu for reconnect recovery. |
+| `GET /sessions/{session_id}` | `get_session` | No body → own session: status, cart, help flag, order ID and last activity time. |
+| `PUT /sessions/{session_id}/cart` | `update_cart` | `items` → replaces the cart; returns `cart` event with priced `lines`, `total`, `summary`. `[]` clears it. |
+| `POST /sessions/{session_id}/order` | `place_order` | `items`, optional `paymentMethod`, `note` → `ordered` event with `orderId`, `orderNumber`, total and status. Frees the kiosk. |
+| `POST /sessions/{session_id}/help` | `ask_for_help` | No body → flags the session for staff; returns `help` event. |
+| `POST /sessions/{session_id}/end` | `disconnect` | No body → disconnects; returns `ended` event. Does not cancel an order. |
+| `GET /orders/{order_id}` | `get_order` | No body → own order: status, lines, total, summary, payment choice, note and timestamps. |
+| `POST /orders/{order_id}/cancel` | `cancel_order` | No body → cancels a `submitted` order; returns `order_status` event. |
+
+### Cart and order body
+
+For an order, send the body below. For a cart update, send only `items`.
+Item and option IDs come from the store's menu.
+
+```json
+{
+  "items": [
+    {"itemId": "americano", "qty": 1, "options": {"temp": "ice", "size": "large", "extra": ["shot"]}}
+  ],
+  "paymentMethod": "counter",
+  "note": ""
+}
+```
+
+- The server calculates prices and checks stock/options. Maximum 20 lines, quantity 1–10 per line. Orders cannot be empty.
+- Single-choice options take a string; multi-choice options take an array. Include every required option.
+- `paymentMethod`: `counter` (default) or `kiosk`. Records where to pay; it does not charge anyone. `note`: up to 200 characters, default empty.
+- Order numbers start at 1 per store and reset at midnight KST. Submission sets the session to `ordered`; pair again for another order.
+
+## Kiosk endpoints
+
+Functions: [kiosk.py](../app/routers/kiosk.py). Kiosk auth required.
+
+| Endpoint | Function | Input → result |
+| --- | --- | --- |
+| `POST /kiosk/heartbeat` | `heartbeat` | No body → `kioskId`, pairing `token`, `expiresAtMs`, `refreshInMs`. Call again after `refreshInMs`. |
+| `GET /kiosk/state` | `kiosk_state` | Active session, today's store orders and current store/menu. |
+| `GET /kiosk/session` | `active_session` | No body → active phone session and cart, or `null`. |
+| `GET /kiosk/orders` | `todays_orders` | Optional `?status=submitted` → today's orders for the kiosk's **store**, newest first. |
+| `POST /kiosk/orders/{order_id}/status` | `set_order_status` | `{"status":"accepted"}` → updates an order in this store; returns `order_status` event. |
+| `POST /kiosk/sessions/{session_id}/resolve-help` | `help_handled` | No body → clears this kiosk's help request; returns `help_resolved` event. |
+| `POST /kiosk/sessions/{session_id}/end` | `end_phone_session` | No body → disconnects this kiosk's phone; returns `ended` event. |
+| `PUT /kiosk/menu/{item_id}/availability` | `set_availability` | `{"available":false}` → marks an item sold out; returns `itemId`, `available`. `true` restores it. |
+
+Order flow: `submitted → accepted → preparing → ready → picked_up`.
+Staff can cancel from `submitted` or `accepted`; the phone can cancel only from
+`submitted`. Skipping steps returns `bad-transition`.
 
 ## Bluetooth advertisement
 
-The kiosk broadcasts `"LK" + kioskId (4 chars) + token (8 chars)`, e.g.
-`LKGK017H3KQ9ZC`. The phone strips `LK`, splits the rest, and calls
-`POST /sessions`. The exact BLE field depends on the kiosk device (iPad or
-Android); not decided yet.
+Intended payload: `LK` + four-character kiosk ID + eight-character token,
+e.g. `LKGK017H3KQ9ZC`. Split into `kioskId` and `token` for pairing.
+The Arduino prototype does not send this yet: [hardware gaps](hardware.md#known-gaps).
 
-## Public
+Tokens rotate about every 30 seconds and expire after 60 seconds. The previous
+token works until its original expiry. One phone per kiosk; the same phone can
+reconnect to its active session.
 
-| Method and path | What it does |
+Sessions become unusable after 10 minutes without activity. Reads and socket
+pings do not refresh activity. Reads report expiry immediately. Cleanup runs every five seconds, releases
+the kiosk and sends an `ended` event with status `expired`.
+
+## Live updates
+
+Functions: [ws.py](../app/routers/ws.py). Use `ws://` locally, `wss://` with HTTPS.
+
+| WebSocket path | Function | Listener |
+| --- | --- | --- |
+| `/ws/kiosk?token=ksk_...` | `kiosk_events` | The authenticated kiosk. |
+| `/ws/sessions/{session_id}?token=dev_...` | `session_events` | The session's phone, including after ordering. |
+
+Session/order mutations return an event over HTTP and publish it to the related
+kiosk and session sockets. Events contain `type`, `kioskId`, `sessionId`,
+`storeId`, `atMs`, plus these fields:
+
+| Event | Extra fields |
 | --- | --- |
-| `GET /stores` | All stores |
-| `GET /stores/{id}` | Store info, accessibility, menu |
-| `GET /stores/nearby?lat=&lng=&radiusM=` | Stores within `radiusM` (default 2000), nearest first, with `distanceM` and `insideGeofence` |
-| `GET /kiosks/{id}` | Kiosk info |
+| `connected` | `kioskName`, `storeName` |
+| `cart` | `lines`, `total`, `summary` |
+| `ordered` | `orderId`, `orderNumber`, `total`, `summary`, `status`, `paymentMethod`, `note` |
+| `help`, `help_resolved` | None |
+| `order_status` | `orderId`, `orderNumber`, `status` |
+| `ended` | Session `status` |
 
-## Phone
+Sockets send future events only. After connecting/reconnecting, fetch current
+state through HTTP. Client messages are ignored. Stock changes send `availability` with `storeId`, `itemId`, `available` to
+all connected phones and kiosks in that store. Rejections use `4401` (bad token) or `4403` (missing session
+or wrong owner).
 
-| Method and path | Body | What it does |
+## Demo endpoints
+
+Functions: [demo.py](../app/routers/demo.py). No auth. Disabled unless `DEMO_MODE=1`:
+HTTP returns `404` / `demo-disabled`; the socket uses `4404`. Keep off in production.
+
+| Endpoint | Function | Input → result |
 | --- | --- | --- |
-| `POST /devices` | — | Get an anonymous device token |
-| `POST /sessions` | `kioskId`, `token` | Connect to a kiosk → `sessionId` |
-| `GET /sessions/{id}` | — | Connection status and cart |
-| `PUT /sessions/{id}/cart` | `items` | Update the cart shown on the kiosk |
-| `POST /sessions/{id}/order` | `items`, `paymentMethod`?, `note`? | Place the order → `orderId`, `orderNumber` |
-| `POST /sessions/{id}/help` | — | Ask staff for help |
-| `POST /sessions/{id}/end` | — | Disconnect |
-| `GET /orders/{id}` | — | Order status |
-| `POST /orders/{id}/cancel` | — | Cancel before staff accepts |
+| `GET /kiosks/{kiosk_id}/token` | `get_kiosk_token` | `kioskId`, `token`, `expiresAtMs`; creates a fresh token if needed. Allows pairing without Bluetooth. |
+| `POST /proximity` | `report_proximity` | Required `distance`; optional `storeName` (default `GIST Cafe점`), `kioskId` (`GK01`), `rssi` (`null`) → broadcasts a reading; returns `status`, `distance`. |
+| `WS /ws/proximity` | `proximity_events` | Receives `{"type":"proximity", ...readingFields}`. Readings are not saved. |
 
-`items` (prices are never sent; the server computes them):
+## Common errors
 
-```json
-[{"itemId": "americano", "qty": 1, "options": {"temp": "ice", "size": "large", "extra": ["shot"]}}]
-```
+Application errors use `{"error":"code","message":"English explanation"}`.
+Request validation errors also include `details`. Map codes to accessible Korean
+messages. Unknown routes use FastAPI's default error format.
 
-`paymentMethod` is `counter` (default) or `kiosk`. One phone per kiosk at a
-time. A phone idle for 10 minutes is disconnected.
-
-## Kiosk
-
-| Method and path | Body | What it does |
+| HTTP | Codes | What to do |
 | --- | --- | --- |
-| `POST /kiosk/heartbeat` | — | Get the Bluetooth token. Call again after `refreshInMs` |
-| `GET /kiosk/session` | — | The connected phone and its cart, or `null` |
-| `GET /kiosk/orders?status=` | — | Today's orders, newest first |
-| `POST /kiosk/orders/{id}/status` | `status` | `accepted`, `preparing`, `ready`, `picked_up`, `cancelled` |
-| `POST /kiosk/sessions/{id}/resolve-help` | — | Staff handled the help request |
-| `POST /kiosk/sessions/{id}/end` | — | Disconnect the phone |
-| `PUT /kiosk/menu/{itemId}/availability` | `available` | Sold out / back in stock |
+| 400 | `bad-request`, `bad-kiosk-id`, `bad-token`, `bad-qty`, `missing-option`, `bad-payment-method`, `bad-note` | Fix the request or menu selections. |
+| 401 | `not-signed-in`, `not-kiosk` | Supply the correct phone token or kiosk key. |
+| 403 | `token-invalid`, `not-your-session` | Rescan an expired pairing token, or use your own session. |
+| 404 | `store-not-found`, `kiosk-not-found`, `session-not-found`, `order-not-found`, `unknown-item` | Check the ID. Reads also hide sessions/orders belonging to another caller. |
+| 409 | `kiosk-busy`, `session-expired` | Wait for the kiosk or pair again. |
+| 409 | `item-unavailable`, `choice-unavailable`, `too-late-to-cancel`, `bad-transition` | Refresh the menu or order and show the reason. |
 
-## Live updates (WebSocket)
+Full rules: [logic.py](../app/logic.py). Error mapping: [errors.py](../app/errors.py).
 
-- Kiosk: `ws://HOST/ws/kiosk?token=ksk_...`
-- Phone: `ws://HOST/ws/sessions/{sessionId}?token=dev_...`
+## Running it
 
-Each message is a JSON event with a `type`: `connected`, `cart`, `ordered`,
-`help`, `help_resolved`, `order_status`, `ended`. The kiosk and the phone in
-that session both get every event. Refused connections close with `4401`
-(bad token) or `4403` (not your session).
+- SQLite locally; set `DATABASE_URL` for Postgres and `CORS_ORIGINS` for allowed browser origins.
+- Run [database migrations](migrations.md) before deployment; startup only creates missing tables.
+- Run one server process: WebSocket subscriptions are held in memory.
+- Settings come from environment variables. `.env` is not loaded automatically.
+- Optional `FRONTEND_DIR` serves a built frontend at `/app`.
 
-## Demo mode
+Next steps: [roadmap](roadmap.md).
 
-Off (404, WebSocket closes with `4404`) unless `DEMO_MODE=1`. Never on a real deployment.
+Registration is limited to 30 requests/minute per peer IP; pairing to 60.
+A limit returns HTTP `429` with `Retry-After` and a `detail` message. Limits are
+process-local and reset on restart. Configure trusted proxies in the ASGI server.
 
-| Method and path | What it does |
-| --- | --- |
-| `GET /kiosks/{id}/token` | The kiosk's current pairing token, as if heard over Bluetooth |
-| `POST /proximity` | `distance`, `storeName`?, `kioskId`?, `rssi`?: a beacon reading |
-| `ws://HOST/ws/proximity` | Every proximity reading, live |
+Reconnect: open the socket, then fetch `/kiosk/state` or
+`/sessions/{session_id}/state`. Treat events as notifications to refetch state,
+including events received while a fetch is in flight. Retry failed fetches.
+Snapshots recover missed updates; historical events are not replayed.
 
-## Errors
+## Safe checkout
 
-Every error is `{"error": "<code>", "message": "..."}`. Map codes to Korean
-messages the screen reader can read.
+Cart updates now return `quoteId`. Send it with the order body; the server
+rejects changed prices/items with `409 price-changed`. Refresh and ask the user
+to confirm again. Sold-out items retain their existing availability errors.
 
-| Code | HTTP | Meaning |
-| --- | --- | --- |
-| `token-invalid` | 403 | Too far or token expired: move closer and rescan |
-| `kiosk-busy` | 409 | Another phone is using this kiosk |
-| `session-expired`, `session-not-found` | 409, 404 | Connection ended: reconnect |
-| `item-unavailable`, `choice-unavailable` | 409 | Sold out |
-| `missing-option` | 400 | A required option (e.g. size) was not chosen |
-| `too-late-to-cancel` | 409 | Staff already started the order |
-| `not-signed-in`, `not-kiosk` | 401 | Missing or wrong token |
-| `not-your-session`, `not-your-kiosk` | 403 | Token belongs to someone else |
-| `bad-request`, `bad-qty`, `unknown-item`, ... | 400, 404 | App bug: invalid request |
-
-## Deploying
-
-- Use Postgres: `DATABASE_URL=postgresql+psycopg://user:password@host:5432/galjido`.
-  Tables are created on first start. Then load the store and issue kiosk keys
-  with `scripts.seed` and `scripts.create_kiosk`, as in the quickstart.
-- Schema changes are not migrated: the app only creates missing tables. Until
-  there is data worth keeping, drop the tables and reseed.
-- Run **one** server process (no `--workers`): live updates are kept in memory.
-  Use a host with WebSocket support (e.g. AWS EC2 or Lightsail).
-- Keep secrets in a local `.env`. It is ignored by Git.
+Send `Idempotency-Key` (8?128 characters) with order POST and persist the exact
+body/key before sending. Identical retries for the same device/session return
+the original response, even after ordering. Reusing the key with another body
+returns `409 idempotency-conflict`. A session still permits only one order.
+These fields are optional for old clients; safe checkout requires both.
+Migration `0002` must run before starting this release.

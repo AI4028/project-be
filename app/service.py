@@ -7,6 +7,8 @@ routers publish to the kiosk and phone.
 from __future__ import annotations
 
 import uuid
+import hashlib
+import json
 from collections.abc import Callable
 from typing import Any, TypeVar
 
@@ -69,8 +71,9 @@ def _own_active_session(db: Session, device: Device, session_id: str, now: int) 
     return session
 
 
-def _menu(db: Session, store_id: str) -> list[dict[str, Any]]:
-    store = db.get(Store, store_id)
+def _menu(db: Session, store_id: str, lock: bool = False) -> list[dict[str, Any]]:
+    store = (db.scalar(select(Store).where(Store.id == store_id).with_for_update()
+                       .execution_options(populate_existing=True)) if lock else db.get(Store, store_id))
     if store is None:
         raise AppError("store-not-found", "Store not found.")
     return store.menu or []
@@ -154,9 +157,8 @@ def connect_to_kiosk(db: Session, device: Device, kiosk_id: Any, token: Any, now
                 previous.last_active_at = now  # same phone reconnecting
                 return connected(previous.id)
             raise AppError("kiosk-busy", "Someone else is using this kiosk from their phone. Please wait a moment.")
-        if previous is not None and previous.status == "active":
-            previous.status = "expired"
-            previous.ended_at = now
+        # Cleanup expires the old session and emits its event. It checks the
+        # active-session pointer, so it cannot release this new connection.
 
         session = KioskSession(
             id=str(uuid.uuid4()),
@@ -183,11 +185,12 @@ def sync_cart(db: Session, device: Device, session_id: str, items: Any, now: int
     def run() -> dict[str, Any]:
         session = _own_active_session(db, device, session_id, now)
         cart = _cart_for(db, session.store_id, items)
+        cart["quoteId"] = str(uuid.uuid4())
         session.cart = cart
         session.last_active_at = now
         return event(
             "cart", session.kiosk_id, now, sessionId=session.id, storeId=session.store_id,
-            total=cart["total"], summary=cart["summary"], lines=cart["lines"],
+            total=cart["total"], summary=cart["summary"], lines=cart["lines"], quoteId=cart["quoteId"],
         )
 
     return transact(db, run)
@@ -197,16 +200,35 @@ def sync_cart(db: Session, device: Device, session_id: str, items: Any, now: int
 
 
 def submit_order(
-    db: Session, device: Device, session_id: str, items: Any, payment_method: str, note: str, now: int
+    db: Session, device: Device, session_id: str, items: Any, payment_method: str, note: str, now: int,
+    quote_id: str | None = None, request_key: str | None = None
 ) -> dict[str, Any]:
     if payment_method not in config.PAYMENT_METHODS:
         raise AppError("bad-payment-method", f"paymentMethod must be one of: {', '.join(config.PAYMENT_METHODS)}.")
     if not isinstance(note, str) or len(note) > config.MAX_NOTE_LENGTH:
         raise AppError("bad-note", f"Note must be text up to {config.MAX_NOTE_LENGTH} characters.")
 
+    if request_key is not None and not 8 <= len(request_key) <= 128:
+        raise AppError("bad-request-key", "Idempotency-Key must be 8-128 characters.")
+    fingerprint = hashlib.sha256(json.dumps(
+        {"items": items, "paymentMethod": payment_method, "note": note, "quoteId": quote_id},
+        sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+    ).encode()).hexdigest()
+
     def run() -> dict[str, Any]:
+        session = db.scalar(select(KioskSession).where(KioskSession.id == session_id)
+                            .with_for_update().execution_options(populate_existing=True))
+        if session is not None and session.device_id == device.id and request_key and session.submission:
+            saved = session.submission
+            if saved["key"] == request_key:
+                if saved["hash"] != fingerprint:
+                    raise AppError("idempotency-conflict", "This request key was used with different order details.")
+                return saved["event"]
         session = _own_active_session(db, device, session_id, now)
-        lines, total = build_order_lines(_menu(db, session.store_id), items)
+        lines, total = build_order_lines(_menu(db, session.store_id, lock=True), items)
+        if quote_id is not None and (session.cart.get("quoteId") != quote_id
+                                    or session.cart.get("lines") != lines or session.cart.get("total") != total):
+            raise AppError("price-changed", "Refresh the cart and confirm its current price before ordering.")
         summary = summarize_order(lines)
         day = kst_day(now)
         last = db.scalar(
@@ -238,11 +260,14 @@ def submit_order(
         if kiosk is not None and kiosk.active_session_id == session.id:
             kiosk.active_session_id = None
         db.flush()  # a duplicate order number fails here and is retried
-        return event(
+        result = event(
             "ordered", session.kiosk_id, now, sessionId=session.id, storeId=session.store_id, orderId=order.id,
             orderNumber=order.order_number, total=total, summary=summary, status="submitted",
             paymentMethod=payment_method, note=order.note,
         )
+        if request_key:
+            session.submission = {"key": request_key, "hash": fingerprint, "event": result}
+        return result
 
     return transact(db, run)
 
@@ -373,11 +398,34 @@ def session_dict(session: KioskSession) -> dict[str, Any]:
     }
 
 
-def get_my_session(db: Session, device: Device, session_id: str) -> dict[str, Any]:
+def get_my_session(db: Session, device: Device, session_id: str, now: int | None = None) -> dict[str, Any]:
     session = db.get(KioskSession, session_id)
     if session is None or session.device_id != device.id:
         raise AppError("session-not-found", "Session not found.")
-    return session_dict(session)
+    result = session_dict(session)
+    if now is not None and session.status == "active" and _is_idle(session, now):
+        result["status"] = "expired"
+    return result
+
+
+def expire_sessions(db: Session, now: int) -> list[dict[str, Any]]:
+    """Persist idle expiry and release kiosks; publish returned events after commit."""
+    def run():
+        events = []
+        sessions = db.scalars(select(KioskSession).where(
+            KioskSession.status == "active",
+            KioskSession.last_active_at <= now - config.SESSION_IDLE_MS,
+        ).with_for_update().execution_options(populate_existing=True))
+        for session in sessions:
+            session.status = "expired"
+            session.ended_at = now
+            kiosk = db.get(Kiosk, session.kiosk_id, populate_existing=True)
+            if kiosk is not None and kiosk.active_session_id == session.id:
+                kiosk.active_session_id = None
+            events.append(event("ended", session.kiosk_id, now, sessionId=session.id,
+                                storeId=session.store_id, status="expired"))
+        return events
+    return transact(db, run)
 
 
 def kiosk_active_session(db: Session, kiosk: Kiosk, now: int) -> dict[str, Any] | None:
@@ -404,7 +452,8 @@ def kiosk_orders(db: Session, kiosk: Kiosk, now: int, status: str | None = None)
 
 def set_item_availability(db: Session, kiosk: Kiosk, item_id: str, available: bool) -> dict[str, Any]:
     def run() -> dict[str, Any]:
-        store = db.get(Store, kiosk.store_id, populate_existing=True)
+        store = db.scalar(select(Store).where(Store.id == kiosk.store_id)
+                          .with_for_update().execution_options(populate_existing=True))
         if store is None:
             raise AppError("store-not-found", "Store not found.")
         menu = [dict(m) for m in store.menu or []]
@@ -415,4 +464,27 @@ def set_item_availability(db: Session, kiosk: Kiosk, item_id: str, available: bo
         store.menu = menu  # new list so SQLAlchemy detects the change
         return {"itemId": item_id, "available": available}
 
+    return transact(db, run)
+
+
+def revoke_device(db: Session, device: Device, now: int):
+    """Invalidate a phone token and release its sessions in one transaction."""
+    from app.auth import hash_token, new_device_token
+
+    def run():
+        db.refresh(device)
+        device.token_hash = hash_token(new_device_token())
+        events, ids = [], []
+        for session in db.scalars(select(KioskSession).where(KioskSession.device_id == device.id)
+                                  .with_for_update().execution_options(populate_existing=True)):
+            ids.append(session.id)
+            if session.status == "active":
+                session.status = "ended"
+                session.ended_at = now
+                kiosk = db.get(Kiosk, session.kiosk_id, populate_existing=True)
+                if kiosk and kiosk.active_session_id == session.id:
+                    kiosk.active_session_id = None
+                events.append(event("ended", session.kiosk_id, now, sessionId=session.id,
+                                            storeId=session.store_id, status="ended"))
+        return events, ids
     return transact(db, run)

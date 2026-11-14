@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.responses import KioskOut, StoreOut
 from app.db import get_db
 from app.errors import AppError
 from app.logic import distance_m
@@ -34,13 +35,13 @@ def store_dict(store: Store, with_menu: bool) -> dict[str, Any]:
     return data
 
 
-@router.get("/stores")
+@router.get("/stores", response_model=list[StoreOut], response_model_exclude_unset=True)
 def list_stores(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
     """All stores, without menus."""
     return [store_dict(s, with_menu=False) for s in db.scalars(select(Store).order_by(Store.name))]
 
 
-@router.get("/stores/nearby")
+@router.get("/stores/nearby", response_model=list[StoreOut], response_model_exclude_unset=True)
 def nearby_stores(
     lat: float = Query(ge=-90, le=90),
     lng: float = Query(ge=-180, le=180),
@@ -59,7 +60,7 @@ def nearby_stores(
     return sorted(found, key=lambda s: s["distanceM"])
 
 
-@router.get("/stores/{store_id}")
+@router.get("/stores/{store_id}", response_model=StoreOut, response_model_exclude_unset=True)
 def get_store(store_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     """One store with its full menu."""
     store = db.get(Store, store_id)
@@ -68,7 +69,7 @@ def get_store(store_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     return store_dict(store, with_menu=True)
 
 
-@router.get("/kiosks/{kiosk_id}")
+@router.get("/kiosks/{kiosk_id}", response_model=KioskOut, response_model_exclude_unset=True)
 def get_kiosk(kiosk_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     """Kiosk name, e.g. to read aloud before pairing."""
     kiosk = db.get(Kiosk, kiosk_id)
