@@ -99,8 +99,8 @@ token works until its original expiry. One phone per kiosk; the same phone can
 reconnect to its active session.
 
 Sessions become unusable after 10 minutes without activity. Reads and socket
-pings do not refresh activity. Expiry is checked on requests, with no automatic
-`ended` event; a session read can still show the stored `active` status.
+pings do not refresh activity. Reads report expiry immediately. Cleanup runs every five seconds, releases
+the kiosk and sends an `ended` event with status `expired`.
 
 ## Live updates
 

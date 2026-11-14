@@ -40,8 +40,8 @@ def connect(
 
 
 @router.get("/sessions/{session_id}")
-def get_session(session_id: str, device: Device = Depends(current_device), db: Session = Depends(get_db)) -> dict[str, Any]:
-    return service.get_my_session(db, device, session_id)
+def get_session(session_id: str, device: Device = Depends(current_device), db: Session = Depends(get_db), now: int = Depends(get_now)) -> dict[str, Any]:
+    return service.get_my_session(db, device, session_id, now)
 
 
 @router.put("/sessions/{session_id}/cart")

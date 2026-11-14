@@ -373,11 +373,34 @@ def session_dict(session: KioskSession) -> dict[str, Any]:
     }
 
 
-def get_my_session(db: Session, device: Device, session_id: str) -> dict[str, Any]:
+def get_my_session(db: Session, device: Device, session_id: str, now: int | None = None) -> dict[str, Any]:
     session = db.get(KioskSession, session_id)
     if session is None or session.device_id != device.id:
         raise AppError("session-not-found", "Session not found.")
-    return session_dict(session)
+    result = session_dict(session)
+    if now is not None and session.status == "active" and _is_idle(session, now):
+        result["status"] = "expired"
+    return result
+
+
+def expire_sessions(db: Session, now: int) -> list[dict[str, Any]]:
+    """Persist idle expiry and release kiosks; publish returned events after commit."""
+    def run():
+        events = []
+        sessions = db.scalars(select(KioskSession).where(
+            KioskSession.status == "active",
+            KioskSession.last_active_at <= now - config.SESSION_IDLE_MS,
+        ).with_for_update().execution_options(populate_existing=True))
+        for session in sessions:
+            session.status = "expired"
+            session.ended_at = now
+            kiosk = db.get(Kiosk, session.kiosk_id, populate_existing=True)
+            if kiosk is not None and kiosk.active_session_id == session.id:
+                kiosk.active_session_id = None
+            events.append(event("ended", session.kiosk_id, now, sessionId=session.id,
+                                storeId=session.store_id, status="expired"))
+        return events
+    return transact(db, run)
 
 
 def kiosk_active_session(db: Session, kiosk: Kiosk, now: int) -> dict[str, Any] | None:

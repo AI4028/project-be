@@ -1,4 +1,5 @@
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,12 +9,19 @@ from app import config
 from app.db import create_tables
 from app.errors import install_error_handlers
 from app.routers import demo, kiosk, phone, public, ws
+from app.maintenance import maintain
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     create_tables()  # creates missing tables only
-    yield
+    task = asyncio.create_task(maintain(_))
+    try:
+        yield
+    finally:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
 
 
 app = FastAPI(title="Galjido API", lifespan=lifespan)
