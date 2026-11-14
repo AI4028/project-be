@@ -146,3 +146,19 @@ def test_changed_price_requires_new_quote_without_creating_order(env):
     refreshed = env.client.put(f'/sessions/{sid}/cart', headers=phone, json={'items': AMERICANO}).json()
     assert env.client.post(f'/sessions/{sid}/order', headers=phone,
                            json={'items': AMERICANO, 'quoteId': refreshed['quoteId']}).status_code == 201
+
+def test_concurrent_order_retries_create_one_order(env):
+    from concurrent.futures import ThreadPoolExecutor
+    from tests.test_api import AMERICANO
+    phone = new_phone(env)
+    sid = connect(env, phone).json()['sessionId']
+    quote = env.client.put(f'/sessions/{sid}/cart', headers=phone, json={'items': AMERICANO}).json()
+    def submit():
+        return env.client.post(f'/sessions/{sid}/order',
+            headers={**phone, 'Idempotency-Key': 'concurrent-retry'},
+            json={'items': AMERICANO, 'quoteId': quote['quoteId']})
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(executor.map(lambda _: submit(), range(2)))
+    assert [r.status_code for r in responses] == [201, 201]
+    assert responses[0].json() == responses[1].json()
+    assert len(env.client.get('/kiosk/orders', headers=env.kiosk).json()) == 1
