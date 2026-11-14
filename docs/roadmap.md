@@ -24,8 +24,8 @@ in its own repo.
 | Add response schemas. | Done: typed responses document store, session, order, cart and event fields in `/docs`. |
 | Improve recovery after disconnects. | Events have no replay; clients must refetch state. Stock changes also need a live event if menus should update immediately. |
 | Add database migrations. | Startup creates missing tables only. Schema changes need a migration path before keeping pilot data. |
-| Add rate limits and device-token revocation. | Registration and pairing have no throttling; phone tokens have no expiry or revoke endpoint. |
-| Add a database readiness check. | `/health` only confirms the app responds. |
+| Add rate limits and device-token revocation. | Done: registration/pairing limits and self-service phone-token revocation. Limits are process-local; tokens remain valid until revoked. |
+| Add a database readiness check. | Done: `/ready` checks database/schema access and returns 503 on failure; `/health` remains liveness. |
 
 ## Later, if needed
 

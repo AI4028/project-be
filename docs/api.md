@@ -24,6 +24,7 @@ Functions: [main.py](../app/main.py), [public.py](../app/routers/public.py).
 | Endpoint | Function | What it does / returns |
 | --- | --- | --- |
 | `GET /` | `read_root` | `{"message":"Galjido API is running"}`. |
+| `GET /ready` | `readiness_check` | Database/schema readiness: `200` or `503`, without connection details. |
 | `GET /health` | `health_check` | `{"status":"ok"}`. Does not check the database. |
 | `GET /stores` | `list_stores` | All stores, sorted by name, without menus. |
 | `GET /stores/nearby` | `nearby_stores` | Required `lat`, `lng`; optional `radiusM` (default 2000, range 1–20000). Stores without menus, nearest first, with `distanceM` and `insideGeofence`. |
@@ -40,6 +41,7 @@ Functions: [phone.py](../app/routers/phone.py). Phone auth required except regis
 
 | Endpoint | Function | Input → result |
 | --- | --- | --- |
+| `DELETE /devices/me` | `revoke_device` | Revokes the current phone token, releases its active kiosks and closes its sockets. |
 | `POST /devices` | `register_device` | No body → anonymous `deviceId` and `token`; no sign-up. |
 | `POST /sessions` | `connect` | `kioskId`, `token` → `connected` event with `sessionId`, store and kiosk details. |
 | `GET /sessions/{session_id}` | `get_session` | No body → own session: status, cart, help flag, order ID and last activity time. |
@@ -166,3 +168,7 @@ Full rules: [logic.py](../app/logic.py). Error mapping: [errors.py](../app/error
 - Optional `FRONTEND_DIR` serves a built frontend at `/app`.
 
 Next steps: [roadmap](roadmap.md).
+
+Registration is limited to 30 requests/minute per peer IP; pairing to 60.
+A limit returns HTTP `429` with `Retry-After` and a `detail` message. Limits are
+process-local and reset on restart. Configure trusted proxies in the ASGI server.

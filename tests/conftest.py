@@ -58,6 +58,9 @@ def env(tmp_path, monkeypatch):
         kiosk_key = issue_kiosk_key(db, "GK01")
         other_key = issue_kiosk_key(db, "XK01")
 
+    from app.limits import registration_limit, pairing_limit
+    registration_limit.entries.clear()
+    pairing_limit.entries.clear()
     clock = Clock(T0)
     app.dependency_overrides[get_now] = lambda: clock.now
     with TestClient(app) as client:

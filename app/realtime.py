@@ -37,5 +37,12 @@ class Hub:
         if event.get("sessionId"):
             await self.send(f"session:{event['sessionId']}", event)
 
+    async def close(self, channel: str) -> None:
+        for ws in list(self._channels.get(channel, ())):
+            try:
+                await ws.close(code=4401)
+            finally:
+                self.leave(channel, ws)
+
 
 hub = Hub()

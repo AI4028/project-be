@@ -2,6 +2,11 @@ import asyncio
 from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
+from app import db as database
+from app.models import Store
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -43,4 +48,15 @@ def read_root():
 
 @app.get("/health")
 def health_check():
+    return {"status": "ok"}
+
+
+@app.get("/ready")
+def readiness_check():
+    """Check database connectivity and the application schema without exposing errors."""
+    try:
+        with database.SessionLocal() as db:
+            db.execute(select(Store.id).limit(1))
+    except SQLAlchemyError:
+        return JSONResponse(status_code=503, content={"status": "unavailable"})
     return {"status": "ok"}
