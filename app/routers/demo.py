@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, WebSocket
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.responses import ProximityOut, TokenOut
 from app import config, service
 from app.clock import get_now
 from app.db import get_db
@@ -40,7 +41,7 @@ class ProximityIn(BaseModel):
     rssi: int | None = None
 
 
-@router.get("/kiosks/{kiosk_id}/token", dependencies=[Depends(require_demo_mode)])
+@router.get("/kiosks/{kiosk_id}/token", dependencies=[Depends(require_demo_mode)], response_model=TokenOut, response_model_exclude_unset=True)
 def get_kiosk_token(kiosk_id: str, db: Session = Depends(get_db), now: int = Depends(get_now)) -> dict[str, Any]:
     """The kiosk's current Bluetooth pairing token, as if the phone had heard it."""
     kiosk = db.get(Kiosk, kiosk_id)
@@ -52,7 +53,7 @@ def get_kiosk_token(kiosk_id: str, db: Session = Depends(get_db), now: int = Dep
     return {"kioskId": kiosk.id, "token": kiosk.current_token, "expiresAtMs": kiosk.current_expires_at}
 
 
-@router.post("/proximity", dependencies=[Depends(require_demo_mode)])
+@router.post("/proximity", dependencies=[Depends(require_demo_mode)], response_model=ProximityOut, response_model_exclude_unset=True)
 async def report_proximity(body: ProximityIn) -> dict[str, Any]:
     """A beacon distance reading from the Bluetooth bridge."""
     await hub.send("proximity", {"type": "proximity", **body.model_dump()})

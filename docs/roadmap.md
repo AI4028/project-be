@@ -21,7 +21,7 @@ in its own repo.
 | Task | Current gap |
 | --- | --- |
 | Make session expiry explicit. | Done: reads report expiry; periodic cleanup persists it, releases the kiosk and publishes an event. |
-| Add response schemas. | Most responses are generic dictionaries. Define the actual fields so `/docs` gives clients a useful response contract. |
+| Add response schemas. | Done: typed responses document store, session, order, cart and event fields in `/docs`. |
 | Improve recovery after disconnects. | Events have no replay; clients must refetch state. Stock changes also need a live event if menus should update immediately. |
 | Add database migrations. | Startup creates missing tables only. Schema changes need a migration path before keeping pilot data. |
 | Add rate limits and device-token revocation. | Registration and pairing have no throttling; phone tokens have no expiry or revoke endpoint. |

@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
 
+from app.responses import AvailabilityOut, Ended, HelpEvent, OrderEvent, OrderOut, SessionOut, TokenOut
 from app import service
 from app.auth import current_kiosk
 from app.clock import get_now
@@ -18,7 +19,7 @@ from app.schemas import AvailabilityIn, StatusIn
 router = APIRouter(prefix="/kiosk", tags=["kiosk"])
 
 
-@router.post("/heartbeat")
+@router.post("/heartbeat", response_model=TokenOut, response_model_exclude_unset=True)
 def heartbeat(
     kiosk: Kiosk = Depends(current_kiosk), db: Session = Depends(get_db), now: int = Depends(get_now)
 ) -> dict[str, Any]:
@@ -26,7 +27,7 @@ def heartbeat(
     return service.kiosk_heartbeat(db, kiosk, now)
 
 
-@router.get("/session")
+@router.get("/session", response_model=SessionOut | None, response_model_exclude_unset=True)
 def active_session(
     kiosk: Kiosk = Depends(current_kiosk), db: Session = Depends(get_db), now: int = Depends(get_now)
 ) -> dict[str, Any] | None:
@@ -34,7 +35,7 @@ def active_session(
     return service.kiosk_active_session(db, kiosk, now)
 
 
-@router.get("/orders")
+@router.get("/orders", response_model=list[OrderOut], response_model_exclude_unset=True)
 def todays_orders(
     status: str | None = None,
     kiosk: Kiosk = Depends(current_kiosk),
@@ -45,7 +46,7 @@ def todays_orders(
     return service.kiosk_orders(db, kiosk, now, status)
 
 
-@router.post("/orders/{order_id}/status")
+@router.post("/orders/{order_id}/status", response_model=OrderEvent, response_model_exclude_unset=True)
 def set_order_status(
     order_id: str,
     body: StatusIn,
@@ -59,7 +60,7 @@ def set_order_status(
     return ev
 
 
-@router.post("/sessions/{session_id}/resolve-help")
+@router.post("/sessions/{session_id}/resolve-help", response_model=HelpEvent, response_model_exclude_unset=True)
 def help_handled(
     session_id: str,
     background: BackgroundTasks,
@@ -72,7 +73,7 @@ def help_handled(
     return ev
 
 
-@router.post("/sessions/{session_id}/end")
+@router.post("/sessions/{session_id}/end", response_model=Ended, response_model_exclude_unset=True)
 def end_phone_session(
     session_id: str,
     background: BackgroundTasks,
@@ -85,7 +86,7 @@ def end_phone_session(
     return ev
 
 
-@router.put("/menu/{item_id}/availability")
+@router.put("/menu/{item_id}/availability", response_model=AvailabilityOut, response_model_exclude_unset=True)
 def set_availability(
     item_id: str, body: AvailabilityIn, kiosk: Kiosk = Depends(current_kiosk), db: Session = Depends(get_db)
 ) -> dict[str, Any]:

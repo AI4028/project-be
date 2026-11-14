@@ -17,3 +17,12 @@ def test_idle_session_reads_expired_and_cleanup_releases_kiosk_once(env):
         assert db.get(Kiosk, "GK01").active_session_id is None
         assert db.get(KioskSession, sid).status == "expired"
         assert service.expire_sessions(db, env.clock.now) == []
+
+def test_openapi_describes_order_and_cart_responses(env):
+    schema = env.client.get('/openapi.json').json()
+    response = schema['paths']['/sessions/{session_id}/order']['post']['responses']['201']
+    assert response['content']['application/json']['schema']['$ref'].endswith('/Ordered')
+    assert 'orderNumber' in schema['components']['schemas']['Ordered']['properties']
+    assert 'unitPrice' in schema['components']['schemas']['LineOut']['properties']
+    stores = env.client.get('/stores').json()
+    assert 'menu' not in stores[0]
