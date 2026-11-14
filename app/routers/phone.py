@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, Header
 from sqlalchemy.orm import Session
 
 from app.responses import CartEvent, Connected, DeviceOut, Ended, HelpEvent, OrderEvent, OrderOut, Ordered, SessionOut
@@ -110,8 +110,9 @@ def place_order(
     device: Device = Depends(current_device),
     db: Session = Depends(get_db),
     now: int = Depends(get_now),
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
-    ev = service.submit_order(db, device, session_id, body.items, body.payment_method, body.note, now)
+    ev = service.submit_order(db, device, session_id, body.items, body.payment_method, body.note, now, body.quote_id, idempotency_key)
     background.add_task(hub.publish, ev)
     return ev
 

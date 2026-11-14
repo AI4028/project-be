@@ -179,3 +179,16 @@ Reconnect: open the socket, then fetch `/kiosk/state` or
 `/sessions/{session_id}/state`. Treat events as notifications to refetch state,
 including events received while a fetch is in flight. Retry failed fetches.
 Snapshots recover missed updates; historical events are not replayed.
+
+## Safe checkout
+
+Cart updates now return `quoteId`. Send it with the order body; the server
+rejects changed prices/items with `409 price-changed`. Refresh and ask the user
+to confirm again. Sold-out items retain their existing availability errors.
+
+Send `Idempotency-Key` (8?128 characters) with order POST and persist the exact
+body/key before sending. Identical retries for the same device/session return
+the original response, even after ordering. Reusing the key with another body
+returns `409 idempotency-conflict`. A session still permits only one order.
+These fields are optional for old clients; safe checkout requires both.
+Migration `0002` must run before starting this release.

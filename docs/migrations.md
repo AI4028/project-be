@@ -16,7 +16,7 @@ Existing database created by this project's original schema:
 python -m scripts.migrate --adopt-existing
 ```
 
-Adoption compares the schema with the application models before recording the
+Adoption compares the schema with the immutable initial schema before recording the
 baseline revision. Differences stop the command for review; existing rows stay.
 Use this only for the initial adoption. Afterwards, run `python -m scripts.migrate`
 on each release, before starting the API. Startup still creates missing tables

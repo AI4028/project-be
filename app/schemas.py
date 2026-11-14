@@ -23,6 +23,7 @@ class CartIn(CamelModel):
 
 class OrderIn(CamelModel):
     items: list[Any]
+    quote_id: str | None = None
     payment_method: str = "counter"  # counter | kiosk
     note: str = ""
 

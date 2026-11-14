@@ -64,6 +64,7 @@ class LineOut(CamelModel):
 
 
 class CartOut(CamelModel):
+    quote_id: str | None = None
     lines: list[LineOut]
     total: int
     summary: str

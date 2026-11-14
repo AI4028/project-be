@@ -107,3 +107,42 @@ def test_revocation_closes_existing_phone_socket(env):
         with pytest.raises(WebSocketDisconnect) as exc:
             ws.receive_json()
         assert exc.value.code == 4401
+
+def test_order_retry_returns_original_result_and_rejects_conflicting_payload(env):
+    from tests.test_api import AMERICANO
+    phone = new_phone(env)
+    sid = connect(env, phone).json()['sessionId']
+    quote = env.client.put(f'/sessions/{sid}/cart', headers=phone, json={'items': AMERICANO}).json()
+    body = {'items': AMERICANO, 'quoteId': quote['quoteId']}
+    headers = {**phone, 'Idempotency-Key': 'retry-key-123'}
+    first = env.client.post(f'/sessions/{sid}/order', headers=headers, json=body)
+    assert first.status_code == 201
+    retry = env.client.post(f'/sessions/{sid}/order', headers=headers, json=body)
+    assert retry.status_code == 201
+    assert retry.json() == first.json()
+    conflict = env.client.post(f'/sessions/{sid}/order', headers=headers, json={**body, 'note': 'different'})
+    assert conflict.status_code == 409
+    assert conflict.json()['error'] == 'idempotency-conflict'
+    assert len(env.client.get('/kiosk/orders', headers=env.kiosk).json()) == 1
+
+
+def test_changed_price_requires_new_quote_without_creating_order(env):
+    from tests.test_api import AMERICANO
+    from app.models import Store
+    phone = new_phone(env)
+    sid = connect(env, phone).json()['sessionId']
+    quote = env.client.put(f'/sessions/{sid}/cart', headers=phone, json={'items': AMERICANO}).json()
+    with env.db() as db:
+        store = db.get(Store, 'gist-cafe')
+        menu = [dict(item) for item in store.menu]
+        next(item for item in menu if item['id'] == 'americano')['price'] += 500
+        store.menu = menu
+        db.commit()
+    response = env.client.post(f'/sessions/{sid}/order', headers=phone,
+                               json={'items': AMERICANO, 'quoteId': quote['quoteId']})
+    assert response.status_code == 409
+    assert response.json()['error'] == 'price-changed'
+    assert env.client.get('/kiosk/orders', headers=env.kiosk).json() == []
+    refreshed = env.client.put(f'/sessions/{sid}/cart', headers=phone, json={'items': AMERICANO}).json()
+    assert env.client.post(f'/sessions/{sid}/order', headers=phone,
+                           json={'items': AMERICANO, 'quoteId': refreshed['quoteId']}).status_code == 201

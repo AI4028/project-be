@@ -16,9 +16,9 @@ in its own repo.
 | 3 | Replace the demo cafe data. | Prices, location and accessibility values are placeholders. Visit the store and update [gist-cafe.json](../seed/gist-cafe.json), including indoor directions. |
 | 4 | Verify the full phone and staff flow. | Connect the map/geofence, cart, help, order status and reconnect screens. Test screen readers, large text and contrast on real devices; measure time to order at the pilot cafe. |
 
-## Backend follow-up
+## Backend work completed
 
-| Task | Current gap |
+| Task | Result |
 | --- | --- |
 | Make session expiry explicit. | Done: reads report expiry; periodic cleanup persists it, releases the kiosk and publishes an event. |
 | Add response schemas. | Done: typed responses document store, session, order, cart and event fields in `/docs`. |
@@ -33,3 +33,9 @@ in its own repo.
 - Payments: `paymentMethod` only records a choice. Agree on the payment flow before adding payment processing.
 - Scaling: add a shared event broker before running multiple workers; add pagination and database-side nearby search as store/order counts grow.
 - Voice ordering and indoor guidance: still product work to explore and test in a noisy cafe.
+
+## Checkout integration
+
+The frontend review identified two additional blockers. Backend support is now
+in place: persistent idempotent order retries and server-validated price quotes.
+Frontend adoption and its tests are in progress.

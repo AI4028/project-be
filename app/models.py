@@ -82,6 +82,7 @@ class KioskSession(Base):
     help_resolved_at: Mapped[int | None] = mapped_column(BigInteger)
     cart: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)  # {lines, total, summary}
     order_id: Mapped[str | None] = mapped_column(String(36))
+    submission: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     version: Mapped[int] = mapped_column(Integer, default=1)
     __mapper_args__ = {"version_id_col": version}
 
