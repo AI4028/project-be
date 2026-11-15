@@ -3,6 +3,44 @@ from app import accessibility
 from app.routers import places
 import hashlib
 import json
+from io import BytesIO
+from urllib.parse import parse_qs, urlparse
+
+
+def test_find_nearby_fetches_distance_sorted_cafes_and_stations(env, monkeypatch):
+    monkeypatch.setenv("KAKAO_REST_API_KEY", "test-key")
+    requests = []
+    def respond(request, timeout):
+        requests.append(request)
+        return BytesIO(json.dumps({"documents": [{
+            "id": "nearby-cafe", "place_name": "Nearby cafe", "x": "127.056", "y": "37.5445",
+        }]}).encode())
+    monkeypatch.setattr(places, "urlopen", respond)
+    response = env.client.get("/places/search", params={"lat": 37.5445, "lng": 127.056}).json()
+    assert response["generalSearch"] == "available"
+    assert response["status"] == "results"
+    assert {p["placeKind"] for p in response["places"]} == {"venue", "station"}
+    url = urlparse(requests[0].full_url)
+    assert url.path == "/v2/local/search/category.json"
+    params = parse_qs(url.query)
+    assert params["category_group_code"] == ["CE7"]
+    assert params["sort"] == ["distance"]
+    assert params["radius"] == ["2000"]
+    assert params["x"] == ["127.056"] and params["y"] == ["37.5445"]
+
+
+def test_nearby_stations_survive_unconfigured_or_failed_venue_search(env, monkeypatch):
+    monkeypatch.delenv("KAKAO_REST_API_KEY", raising=False)
+    params = {"lat": 37.5445, "lng": 127.056}
+    result = env.client.get("/places/search", params=params).json()
+    assert result["places"] and result["generalSearch"] == "not-configured"
+    monkeypatch.setenv("KAKAO_REST_API_KEY", "test-key")
+    def fail(*args, **kwargs):
+        raise URLError("offline")
+    monkeypatch.setattr(places, "urlopen", fail)
+    result = env.client.get("/places/search", params=params).json()
+    assert result["places"] and result["generalSearch"] == "unavailable"
+    assert all(p["placeKind"] == "station" for p in result["places"])
 
 def test_dataset_snapshot_matches_pinned_manifest():
     manifest = json.loads((accessibility.ROOT / "manifest.json").read_text(encoding="utf-8"))

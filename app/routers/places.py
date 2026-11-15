@@ -16,10 +16,11 @@ def kakao_search(query, lat=None, lng=None):
     key = os.environ.get("KAKAO_REST_API_KEY")
     if not key:
         return None
-    params = {"query": query, "size": 15}
+    endpoint = "keyword" if query else "category"
+    params = {"query": query, "size": 15} if query else {"category_group_code": "CE7", "radius": 2000, "size": 15}
     if lat is not None:
-        params.update(x=lng, y=lat)
-    request = Request("https://dapi.kakao.com/v2/local/search/keyword.json?" + urlencode(params),
+        params.update(x=lng, y=lat, sort="distance")
+    request = Request(f"https://dapi.kakao.com/v2/local/search/{endpoint}.json?" + urlencode(params),
         headers={"Authorization": f"KakaoAK {key}", "User-Agent": "Galjido/1.0"})
     try:
         with urlopen(request, timeout=6) as response:
@@ -53,7 +54,7 @@ def search_places(q: str = Query("", max_length=100),
             return {"places": [], "status": "needs-location", "generalSearch": "not-requested"}
         places, status = feature_places(kind, lat, lng)
         return {"places": places, "status": status, "generalSearch": "not-requested"}
-    if kind == "stations" or not q.strip():
+    if kind == "stations" or (not q.strip() and lat is None):
         return {"places": stations, "status": "results" if stations else "empty", "generalSearch": "not-requested"}
     try:
         venues = kakao_search(q.strip(), lat, lng)
