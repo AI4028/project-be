@@ -1,0 +1,26 @@
+{
+  "repository": "https://github.com/Engccer/gildongmu",
+  "revision": "c4a0be3250d9bb7c1df34f3e8c42c8652f9404b9",
+  "files": {
+    "audio-signals.json": {
+      "url": "https://raw.githubusercontent.com/Engccer/gildongmu/c4a0be3250d9bb7c1df34f3e8c42c8652f9404b9/src/lib/data/audio-signals.json",
+      "sha256": "a50420af679a663541b9783f8e062767e31c5e23d17f1d075a5a809e80f013d8"
+    },
+    "voice-guides.json": {
+      "url": "https://raw.githubusercontent.com/Engccer/gildongmu/c4a0be3250d9bb7c1df34f3e8c42c8652f9404b9/src/lib/data/voice-guides.json",
+      "sha256": "20523d631259444f6ec7f9ed7a48d787e4c35637975b39c961f6c648b1c03f20"
+    },
+    "subway-stations.json": {
+      "url": "https://raw.githubusercontent.com/Engccer/gildongmu/c4a0be3250d9bb7c1df34f3e8c42c8652f9404b9/src/lib/data/subway-stations.json",
+      "sha256": "411e857faf70c529a262e68a0dab2a8ec39e560252f887e8f6ee0ed9fe230c28"
+    },
+    "crosswalks.json": {
+      "url": "https://raw.githubusercontent.com/Engccer/gildongmu/c4a0be3250d9bb7c1df34f3e8c42c8652f9404b9/src/lib/data/crosswalks.json",
+      "sha256": "f7c811c4ce2a96be7fe93aae17b19f72e482390956cbf543f22c60e729fd47a4"
+    },
+    "osm-walk-nodes.json": {
+      "url": "https://raw.githubusercontent.com/Engccer/gildongmu/c4a0be3250d9bb7c1df34f3e8c42c8652f9404b9/src/lib/data/osm-walk-nodes.json",
+      "sha256": "973e58520469ccbfecfa59247a3c2711f3353d78c1f10815191d9cb8735ea0d7"
+    }
+  }
+}

@@ -1,0 +1,70 @@
+"""Public place search shared by native and web. Credentials stay on the server."""
+from __future__ import annotations
+import json
+import os
+from typing import Literal
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
+from fastapi import APIRouter, Query
+from app.accessibility import station_places, feature_places, nearby, in_korea
+from app.errors import AppError
+
+router = APIRouter(tags=["places"])
+
+def kakao_search(query, lat=None, lng=None):
+    key = os.environ.get("KAKAO_REST_API_KEY")
+    if not key:
+        return None
+    params = {"query": query, "size": 15}
+    if lat is not None:
+        params.update(x=lng, y=lat)
+    request = Request("https://dapi.kakao.com/v2/local/search/keyword.json?" + urlencode(params),
+        headers={"Authorization": f"KakaoAK {key}", "User-Agent": "Galjido/1.0"})
+    try:
+        with urlopen(request, timeout=6) as response:
+            payload = json.load(response)
+        result = []
+        for item in payload["documents"]:
+            y, x = float(item["y"]), float(item["x"])
+            if not (-90 <= y <= 90 and -180 <= x <= 180):
+                continue
+            result.append({"storeId": "place:" + str(item["id"]), "name": item["place_name"],
+                "address": item.get("road_address_name") or item.get("address_name", ""),
+                "location": {"lat": y, "lng": x}, "accessibility": {}, "directoryOnly": True,
+                "placeKind": "venue", "source": {"name": "Kakao Local", "url": "https://map.kakao.com", "license": "Provider terms", "coverage": "South Korea", "date": "live"}})
+        return result
+    except (URLError, HTTPError, ValueError, KeyError, TypeError):
+        raise AppError("places-unavailable", "Place search is temporarily unavailable.") from None
+
+@router.get("/places/search")
+def search_places(q: str = Query("", max_length=100),
+    kind: Literal["all", "stations", "audio_signals", "voice_guides", "tactile", "crossings"] = "all",
+    lat: float | None = Query(None, ge=-90, le=90), lng: float | None = Query(None, ge=-180, le=180)):
+    if (lat is None) != (lng is None):
+        raise AppError("bad-request", "Provide both latitude and longitude.")
+    if lat is not None and not in_korea(lat, lng):
+        return {"places": [], "status": "outside-coverage", "generalSearch": "unavailable"}
+    stations = station_places(q, lat, lng)
+    if kind not in ("all", "stations"):
+        if lat is None and stations:
+            lat, lng = stations[0]["location"]["lat"], stations[0]["location"]["lng"]
+        if lat is None:
+            return {"places": [], "status": "needs-location", "generalSearch": "not-requested"}
+        places, status = feature_places(kind, lat, lng)
+        return {"places": places, "status": status, "generalSearch": "not-requested"}
+    if kind == "stations" or not q.strip():
+        return {"places": stations, "status": "results" if stations else "empty", "generalSearch": "not-requested"}
+    try:
+        venues = kakao_search(q.strip(), lat, lng)
+        capability = "available" if venues is not None else "not-configured"
+    except AppError:
+        if not stations:
+            raise
+        venues, capability = [], "unavailable"
+    places = [*(venues or []), *stations]
+    return {"places": places, "status": "results" if places else "empty" if capability == "available" else "unavailable", "generalSearch": capability}
+
+@router.get("/accessibility/nearby")
+def nearby_accessibility(lat: float = Query(ge=-90, le=90), lng: float = Query(ge=-180, le=180), radiusM: int = Query(300, ge=25, le=1000)):
+    return {"radiusM": radiusM, "groups": [nearby(kind, lat, lng, radiusM) for kind in ("audio_signals", "voice_guides", "tactile", "crossings")]}

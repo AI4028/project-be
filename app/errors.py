@@ -20,6 +20,7 @@ class AppError(Exception):
 
 # HTTP status per code; anything else is 400.
 _STATUS = {
+    "places-unavailable": 503,
     "not-signed-in": 401,
     "not-kiosk": 401,
     "token-invalid": 403,
