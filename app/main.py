@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from app import config
 from app.db import create_tables
 from app.errors import install_error_handlers
-from app.routers import demo, kiosk, phone, public, ws
+from app.routers import demo, kiosk, phone, public, ws, places
 from app.maintenance import maintain
 
 
@@ -34,7 +34,7 @@ app = FastAPI(title="Galjido API", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 install_error_handlers(app)
 
-for module in (public, phone, kiosk, ws, demo):
+for module in (public, phone, kiosk, ws, demo, places):
     app.include_router(module.router)
 
 if config.FRONTEND_DIR:
