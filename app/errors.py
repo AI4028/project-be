@@ -33,6 +33,7 @@ _STATUS = {
     "unknown-item": 404,
     "demo-disabled": 404,
     "kiosk-busy": 409,
+    "ordering-paused": 409,
     "session-expired": 409,
     "item-unavailable": 409,
     "choice-unavailable": 409,

@@ -152,10 +152,13 @@ def connect_to_kiosk(db: Session, device: Device, kiosk_id: Any, token: Any, now
             )
 
         previous = db.get(KioskSession, kiosk.active_session_id, populate_existing=True) if kiosk.active_session_id else None
-        if previous is not None and previous.status == "active" and not _is_idle(previous, now):
-            if previous.device_id == device.id:
-                previous.last_active_at = now  # same phone reconnecting
-                return connected(previous.id)
+        in_use = previous is not None and previous.status == "active" and not _is_idle(previous, now)
+        if in_use and previous.device_id == device.id:
+            previous.last_active_at = now  # same phone reconnecting
+            return connected(previous.id)
+        if store is not None and store.ordering_paused:
+            raise AppError("ordering-paused", "This store is not taking phone orders right now.")
+        if in_use:
             raise AppError("kiosk-busy", "Someone else is using this kiosk from their phone. Please wait a moment.")
         # Cleanup expires the old session and emits its event. It checks the
         # active-session pointer, so it cannot release this new connection.
@@ -226,6 +229,8 @@ def submit_order(
                 return saved["event"]
         session = _own_active_session(db, device, session_id, now)
         lines, total = build_order_lines(_menu(db, session.store_id, lock=True), items)
+        if db.get(Store, session.store_id).ordering_paused:
+            raise AppError("ordering-paused", "This store is not taking phone orders right now.")
         if quote_id is not None and (session.cart.get("quoteId") != quote_id
                                     or session.cart.get("lines") != lines or session.cart.get("total") != total):
             raise AppError("price-changed", "Refresh the cart and confirm its current price before ordering.")
@@ -448,6 +453,19 @@ def kiosk_orders(db: Session, kiosk: Kiosk, now: int, status: str | None = None)
 
 
 # ---------- staff: sold out ----------
+
+
+def set_ordering_paused(db: Session, kiosk: Kiosk, paused: bool) -> dict[str, Any]:
+    """Staff pause or resume phone ordering for the kiosk's store."""
+    def run() -> dict[str, Any]:
+        store = db.scalar(select(Store).where(Store.id == kiosk.store_id)
+                          .with_for_update().execution_options(populate_existing=True))
+        if store is None:
+            raise AppError("store-not-found", "Store not found.")
+        store.ordering_paused = paused
+        return {"storeId": store.id, "orderingPaused": paused}
+
+    return transact(db, run)
 
 
 def set_item_availability(db: Session, kiosk: Kiosk, item_id: str, available: bool) -> dict[str, Any]:

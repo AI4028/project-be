@@ -26,6 +26,7 @@ class StoreOut(CamelModel):
     accessibility: dict[str, Any]
     kiosk_features: dict[str, Any]
     indoor_directions: str | None
+    ordering_paused: bool = False
     menu: list[dict[str, Any]] | None = None
     distance_m: int | None = None
     inside_geofence: bool | None = None
@@ -141,6 +142,11 @@ class OrderEvent(Event):
     order_id: str
     order_number: int
     status: OrderStatus
+
+
+class OrderingOut(CamelModel):
+    store_id: str
+    ordering_paused: bool
 
 
 class AvailabilityOut(CamelModel):
