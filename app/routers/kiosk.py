@@ -7,14 +7,14 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
 
-from app.responses import AvailabilityOut, Ended, HelpEvent, OrderEvent, OrderOut, SessionOut, TokenOut
+from app.responses import AvailabilityOut, OrderingOut, Ended, HelpEvent, OrderEvent, OrderOut, SessionOut, TokenOut
 from app import service
 from app.auth import current_kiosk
 from app.clock import get_now
 from app.db import get_db
 from app.models import Kiosk
 from app.realtime import hub
-from app.schemas import AvailabilityIn, StatusIn
+from app.schemas import AvailabilityIn, OrderingIn, StatusIn
 from app.responses import KioskState
 from app.routers.public import get_store
 
@@ -105,4 +105,14 @@ def set_availability(
     result = service.set_item_availability(db, kiosk, item_id, body.available)
     background.add_task(hub.send, f"store:{kiosk.store_id}",
                         {"type": "availability", "storeId": kiosk.store_id, **result})
+    return result
+
+
+@router.put("/ordering", response_model=OrderingOut, response_model_exclude_unset=True)
+def set_ordering(
+    body: OrderingIn, background: BackgroundTasks, kiosk: Kiosk = Depends(current_kiosk), db: Session = Depends(get_db)
+) -> dict[str, Any]:
+    """Pause or resume phone ordering for this store. Menus stay visible."""
+    result = service.set_ordering_paused(db, kiosk, body.paused)
+    background.add_task(hub.send, f"store:{kiosk.store_id}", {"type": "ordering", **result})
     return result

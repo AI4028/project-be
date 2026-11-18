@@ -87,6 +87,7 @@ Functions: [kiosk.py](../app/routers/kiosk.py). Kiosk auth required.
 | `POST /kiosk/sessions/{session_id}/resolve-help` | `help_handled` | No body → clears this kiosk's help request; returns `help_resolved` event. |
 | `POST /kiosk/sessions/{session_id}/end` | `end_phone_session` | No body → disconnects this kiosk's phone; returns `ended` event. |
 | `PUT /kiosk/menu/{item_id}/availability` | `set_availability` | `{"available":false}` → marks an item sold out; returns `itemId`, `available`. `true` restores it. |
+| `PUT /kiosk/ordering` | `set_ordering` | `{"paused":true}` → pauses phone ordering for the kiosk's store; returns `storeId`, `orderingPaused`. New pairings and order submits get `409 ordering-paused`; menus stay visible and an already-sent order still replays. Store responses include `orderingPaused`. |
 
 Order flow: `submitted → accepted → preparing → ready → picked_up`.
 Staff can cancel from `submitted` or `accepted`; the phone can cancel only from
@@ -130,7 +131,7 @@ kiosk and session sockets. Events contain `type`, `kioskId`, `sessionId`,
 
 Sockets send future events only. After connecting/reconnecting, fetch current
 state through HTTP. Client messages are ignored. Stock changes send `availability` with `storeId`, `itemId`, `available` to
-all connected phones and kiosks in that store. Rejections use `4401` (bad token) or `4403` (missing session
+all connected phones and kiosks in that store. Pausing or resuming sends `ordering` with `storeId`, `orderingPaused` the same way. Rejections use `4401` (bad token) or `4403` (missing session
 or wrong owner).
 
 ## Demo endpoints
@@ -157,6 +158,7 @@ messages. Unknown routes use FastAPI's default error format.
 | 403 | `token-invalid`, `not-your-session` | Rescan an expired pairing token, or use your own session. |
 | 404 | `store-not-found`, `kiosk-not-found`, `session-not-found`, `order-not-found`, `unknown-item` | Check the ID. Reads also hide sessions/orders belonging to another caller. |
 | 409 | `kiosk-busy`, `session-expired` | Wait for the kiosk or pair again. |
+| 409 | `ordering-paused` | The store paused phone orders; browse menus or order at the counter. |
 | 409 | `item-unavailable`, `choice-unavailable`, `too-late-to-cancel`, `bad-transition` | Refresh the menu or order and show the reason. |
 
 Full rules: [logic.py](../app/logic.py). Error mapping: [errors.py](../app/errors.py).

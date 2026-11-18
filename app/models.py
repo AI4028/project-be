@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import false
 from sqlalchemy import JSON, BigInteger, Boolean, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,6 +31,8 @@ class Store(Base):
     #   options: [{id, name, type, required, maxChoices,
     #              choices: [{id, name, priceDelta, available}]}]}]
     menu: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    # Staff pause: phones can browse but not connect or send orders.
+    ordering_paused: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
 
 
 class Kiosk(Base):

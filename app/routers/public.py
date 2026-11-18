@@ -29,6 +29,7 @@ def store_dict(store: Store, with_menu: bool) -> dict[str, Any]:
         "accessibility": store.accessibility or {},
         "kioskFeatures": store.kiosk_features or {},
         "indoorDirections": store.indoor_directions,
+        "orderingPaused": bool(store.ordering_paused),
     }
     if with_menu:
         data["menu"] = sorted(store.menu or [], key=lambda m: m.get("sortOrder", 0))

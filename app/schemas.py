@@ -32,5 +32,9 @@ class StatusIn(CamelModel):
     status: str  # accepted | preparing | ready | picked_up | cancelled
 
 
+class OrderingIn(CamelModel):
+    paused: bool
+
+
 class AvailabilityIn(CamelModel):
     available: bool

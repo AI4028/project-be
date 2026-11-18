@@ -202,6 +202,49 @@ def test_staff_can_mark_items_sold_out(env):
     error(env.client.put("/kiosk/menu/nope/availability", json={"available": False}, headers=env.kiosk), 404, "unknown-item")
 
 
+def test_staff_can_pause_and_resume_phone_orders(env):
+    phone, session_id = connected(env)
+    assert env.client.put(f"/sessions/{session_id}/cart", json={"items": AMERICANO}, headers=phone).status_code == 200
+    assert env.client.get("/stores/gist-cafe").json()["orderingPaused"] is False
+
+    with env.client.websocket_connect(f"/ws/kiosk?token={env.kiosk_key}") as kiosk_ws:
+        res = env.client.put("/kiosk/ordering", json={"paused": True}, headers=env.kiosk)
+        assert res.status_code == 200, res.text
+        assert res.json() == {"storeId": "gist-cafe", "orderingPaused": True}
+        live = kiosk_ws.receive_json()
+        assert (live["type"], live["orderingPaused"]) == ("ordering", True)
+
+    store = env.client.get("/stores/gist-cafe").json()
+    assert store["orderingPaused"] is True
+    assert store["menu"], "menus stay visible while paused"
+    assert env.client.get("/kiosk/state", headers=env.kiosk).json()["store"]["orderingPaused"] is True
+    error(connect(env, new_phone(env)), 409, "ordering-paused")
+    # A phone already connected can keep its cart but cannot send the order.
+    assert env.client.put(f"/sessions/{session_id}/cart", json={"items": AMERICANO}, headers=phone).status_code == 200
+    error(env.client.post(f"/sessions/{session_id}/order", json={"items": AMERICANO}, headers=phone), 409, "ordering-paused")
+    # Other stores are unaffected, and other kiosks cannot pause this one.
+    assert connect(env, new_phone(env), token=env.client.post("/kiosk/heartbeat", headers=env.other_kiosk).json()["token"], kiosk_id="XK01").status_code == 201
+    assert env.client.get("/stores/gist-cafe").json()["orderingPaused"] is True
+    assert env.client.put("/kiosk/ordering", json={"paused": False}, headers=env.other_kiosk).json()["storeId"] == "other-cafe"
+    assert env.client.get("/stores/gist-cafe").json()["orderingPaused"] is True
+    error(env.client.put("/kiosk/ordering", json={"paused": False}, headers=phone), 401, "not-kiosk")
+
+    assert env.client.put("/kiosk/ordering", json={"paused": False}, headers=env.kiosk).json()["orderingPaused"] is False
+    res = env.client.post(f"/sessions/{session_id}/order", json={"items": AMERICANO}, headers=phone)
+    assert res.status_code == 201, res.text
+
+
+def test_a_sent_order_replays_even_after_ordering_is_paused(env):
+    phone, session_id = connected(env)
+    env.client.put(f"/sessions/{session_id}/cart", json={"items": AMERICANO}, headers=phone)
+    headers = {**phone, "Idempotency-Key": f"order:{session_id}"}
+    first = env.client.post(f"/sessions/{session_id}/order", json={"items": AMERICANO}, headers=headers)
+    assert first.status_code == 201
+    env.client.put("/kiosk/ordering", json={"paused": True}, headers=env.kiosk)
+    again = env.client.post(f"/sessions/{session_id}/order", json={"items": AMERICANO}, headers=headers)
+    assert again.status_code == 201 and again.json()["orderId"] == first.json()["orderId"]
+
+
 def test_store_info_for_accessibility_and_menus(env):
     stores = {s["storeId"]: s for s in env.client.get("/stores").json()}
     gist = stores["gist-cafe"]
