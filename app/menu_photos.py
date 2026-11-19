@@ -9,7 +9,7 @@ from pathlib import Path
 
 import boto3
 from botocore.config import Config
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 from PIL import Image, ImageOps
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import RedirectResponse
@@ -26,8 +26,13 @@ UPLOAD_KEY = re.compile(r"menu/uploads/[0-9a-f]{64}\.jpg")
 
 @lru_cache(maxsize=1)
 def s3():
-    return boto3.client("s3", config=Config(signature_version="s3v4", connect_timeout=3,
-                                            read_timeout=5, retries={"total_max_attempts": 2}))
+    session = boto3.Session()
+    # A client created before EC2 receives a role keeps its empty signer.
+    # Only cache clients that have credentials (including refreshable EC2 ones).
+    if session.get_credentials() is None:
+        raise NoCredentialsError()
+    return session.client("s3", config=Config(signature_version="s3v4", connect_timeout=3,
+                                              read_timeout=5, retries={"total_max_attempts": 2}))
 
 
 def upload_jpeg(key: str, data: bytes) -> None:

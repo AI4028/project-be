@@ -91,3 +91,22 @@ def test_catalog_survives_unavailable_s3_credentials(env, bucket, monkeypatch):
     assert not env.client.get("/kiosk/state", headers=env.kiosk).json()["photoUploadsEnabled"]
     sample = env.client.get(item(env)["imageUrl"], follow_redirects=False)
     assert sample.status_code == 200 and sample.headers["content-type"] == "image/jpeg"
+
+
+def test_sample_recovers_after_instance_role_is_attached(monkeypatch):
+    from unittest.mock import Mock
+
+    session = Mock()
+    session.get_credentials.side_effect = [None, object()]
+    monkeypatch.setattr(menu_photos.boto3, "Session", lambda: session)
+    menu_photos.s3.cache_clear()
+    menu_photos._can_read_sample.cache_clear()
+    try:
+        assert not menu_photos._can_read_sample(BUCKET, "menu/americano.jpg", 1)
+        session.client.assert_not_called()
+        assert menu_photos._can_read_sample(BUCKET, "menu/americano.jpg", 2)
+        assert menu_photos.s3() is session.client.return_value
+        assert session.client.call_count == 1
+    finally:
+        menu_photos.s3.cache_clear()
+        menu_photos._can_read_sample.cache_clear()
