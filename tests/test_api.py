@@ -420,7 +420,7 @@ def test_session_help_state_and_ordered_payload_fields(env):
     assert env.client.get(f"/sessions/{session_id}", headers=phone).json()["helpState"] == "idle"
     assert env.client.post(f"/sessions/{session_id}/help", headers=phone).status_code == 200
     assert env.client.get(f"/sessions/{session_id}", headers=phone).json()["helpState"] == "sent"
-    assert env.client.post(f"/kiosk/sessions/{session_id}/resolve-help", headers=env.kiosk_headers).status_code == 200
+    assert env.client.post(f"/kiosk/sessions/{session_id}/resolve-help", headers=env.kiosk).status_code == 200
     assert env.client.get(f"/sessions/{session_id}", headers=phone).json()["helpState"] == "acknowledged"
 
     items = [{"itemId": "americano", "qty": 1, "options": {"temp": "ice", "size": "regular"}}]
