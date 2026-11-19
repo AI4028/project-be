@@ -31,7 +31,9 @@ class StoreOut(CamelModel):
     phone: str | None = None
     hours: str | None = None
     hours_en: str | None = None
+    has_order_terminal: bool = False
     ordering_paused: bool = False
+    menu_suggestions: list[dict[str, str]] | None = None
     menu: list[dict[str, Any]] | None = None
     distance_m: int | None = None
     inside_geofence: bool | None = None
@@ -102,7 +104,8 @@ class OrderOut(CamelModel):
     summary: str
     lines: list[LineOut]
     note: str
-    payment_method: Literal['counter', 'kiosk']
+    simulated_approved_amount: int | None = None
+    payment_method: Literal['counter', 'kiosk', 'card', 'kakaopay', 'tosspay', 'naverpay']
     created_at_ms: int
     updated_at_ms: int
     help_state: Literal['idle', 'sent', 'acknowledged'] = 'idle'
@@ -134,7 +137,8 @@ class Ordered(Event):
     summary: str
     lines: list[LineOut] = []
     status: Literal['submitted']
-    payment_method: Literal['counter', 'kiosk']
+    simulated_approved_amount: int | None = None
+    payment_method: Literal['counter', 'kiosk', 'card', 'kakaopay', 'tosspay', 'naverpay']
     note: str
     created_at_ms: int | None = None
     updated_at_ms: int | None = None
@@ -179,6 +183,7 @@ class HelpRequest(CamelModel):
 
 
 class KioskState(CamelModel):
+    photo_uploads_enabled: bool = False
     session: SessionOut | None
     orders: list[OrderOut]
     store: StoreOut

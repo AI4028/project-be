@@ -19,6 +19,7 @@ python -m venv .venv
 ```
 
 - `scripts.seed` loads the demo cafe (menu, accessibility info, kiosk GK01).
+- Development also loads three sample stores from the v4 wireframe. Locally run `python -m scripts.seed --missing-only seed/development-stores.json`. Coordinates are approximate neighborhood locations. The frontend uses the supplied thumbnails and listed hours. To accept orders in a sample store, provision its staff terminal once with `scripts.create_kiosk` (OR01, MB01 or CB01) and use the issued key in the kiosk. Existing stores and kiosk keys are preserved on development deployments.
 - `scripts.create_kiosk` prints the kiosk key once. Save it.
 - Data lives in `galjido.db` (SQLite). Delete it to start over.
 

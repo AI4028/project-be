@@ -34,6 +34,7 @@ def store_dict(store: Store, with_menu: bool) -> dict[str, Any]:
         "phone": store.phone,
         "hours": store.hours,
         "hoursEn": store.hours_en,
+        "hasOrderTerminal": bool(store.has_order_terminal),
         "orderingPaused": bool(store.ordering_paused),
     }
     if with_menu:
@@ -43,8 +44,17 @@ def store_dict(store: Store, with_menu: bool) -> dict[str, Any]:
 
 @router.get("/stores", response_model=list[StoreOut], response_model_exclude_unset=True)
 def list_stores(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
-    """All stores, without menus."""
-    return [store_dict(s, with_menu=False) for s in db.scalars(select(Store).order_by(Store.name))]
+    """Store summaries and short, localized suggestions for discovery."""
+    stores = []
+    for store in db.scalars(select(Store).order_by(Store.name)):
+        summary = store_dict(store, with_menu=False)
+        summary["menuSuggestions"] = [
+            {field: item[field] for field in ("name", "nameEn") if item.get(field)}
+            for item in sorted(store.menu or [], key=lambda item: item.get("sortOrder", 0))
+            if item.get("available", True) and item.get("name")
+        ][:5]
+        stores.append(summary)
+    return stores
 
 
 @router.get("/stores/nearby", response_model=list[StoreOut], response_model_exclude_unset=True)

@@ -292,6 +292,7 @@ def test_a_sent_order_replays_even_after_ordering_is_paused(env):
 def test_store_info_for_accessibility_and_menus(env):
     stores = {s["storeId"]: s for s in env.client.get("/stores").json()}
     gist = stores["gist-cafe"]
+    assert gist["menuSuggestions"][0]["name"] == env.client.get("/stores/gist-cafe").json()["menu"][0]["name"]
     assert "menu" not in gist
     assert gist["location"] == {"lat": 35.2286, "lng": 126.8436}
     assert gist["orderingMethods"] == ["kiosk", "phone", "staff"]
@@ -300,6 +301,17 @@ def test_store_info_for_accessibility_and_menus(env):
     assert [m["id"] for m in menu][:2] == ["americano", "cafe-latte"]
     error(env.client.get("/stores/nope"), 404, "store-not-found")
     assert env.client.get("/kiosks/GK01").json()["name"] == "키오스크 1"
+
+
+def test_seeded_menu_photos_are_served_at_their_database_urls(env):
+    menu = env.client.get("/stores/gist-cafe").json()["menu"]
+    photos = {item["id"]: item["imageUrl"] for item in menu if item.get("imageUrl")}
+    assert set(photos) == {"americano", "cafe-latte", "vanilla-latte", "grapefruit-ade"}
+    for url in photos.values():
+        photo = env.client.get(url)
+        assert photo.status_code == 200
+        assert photo.headers["content-type"] == "image/jpeg"
+        assert photo.content.startswith(b"\xff\xd8\xff")
 
 
 def test_store_pickup_location_and_photos(env):
@@ -433,3 +445,46 @@ def test_session_help_state_and_ordered_payload_fields(env):
     assert order["lines"] == cart["lines"]
     assert isinstance(order["createdAtMs"], int)
     assert isinstance(order["updatedAtMs"], int)
+
+@pytest.mark.parametrize("method", ["counter", "kiosk", "card", "kakaopay", "tosspay", "naverpay"])
+def test_checkout_method_survives_order_and_staff_lookup(env, method, monkeypatch):
+    monkeypatch.setattr(config, "DEMO_MODE", True)
+    phone, session_id = connected(env)
+    cart = env.client.put(f"/sessions/{session_id}/cart", json={"items": AMERICANO}, headers=phone).json()
+    response = env.client.post(
+        f"/sessions/{session_id}/order",
+        json={"items": AMERICANO, "paymentMethod": method, "simulatePayment": True, "quoteId": cart["quoteId"]},
+        headers=phone,
+    )
+    assert response.status_code == 201, response.text
+    order = response.json()
+    assert order["simulatedApprovedAmount"] == cart["total"]
+    assert order["paymentMethod"] == method
+    assert env.client.get(f"/orders/{order['orderId']}", headers=phone).json()["paymentMethod"] == method
+    assert env.client.get("/kiosk/orders", headers=env.kiosk).json()[0]["paymentMethod"] == method
+
+
+def test_switch_store_only_replaces_cart_after_destination_accepts(env):
+    phone, old_id = connected(env)
+    previous = env.client.put(f"/sessions/{old_id}/cart", headers=phone, json={"items": AMERICANO}).json()
+    path = "/stores/other-cafe/cart"
+    tea = {"items": [{"itemId": "tea", "qty": 1, "options": {}}]}
+    env.client.put("/kiosk/ordering", headers=env.other_kiosk, json={"paused": True})
+    error(env.client.put(path, headers=phone, json=tea), 409, "ordering-paused")
+    env.client.put("/kiosk/ordering", headers=env.other_kiosk, json={"paused": False})
+    error(env.client.put(path, headers=phone, json={"items": AMERICANO}), 404, "unknown-item")
+    original = env.client.get(f"/sessions/{old_id}", headers=phone).json()
+    assert original["status"] == "active" and original["cart"]["quoteId"] == previous["quoteId"]
+    accepted = env.client.put(path, headers=phone, json=tea).json()
+    assert accepted["cart"]["total"] == 3000
+    assert env.client.put(path, headers=phone, json=tea).json()["sessionId"] == accepted["sessionId"]
+
+
+def test_live_checkout_accepts_payment_at_cafe_and_rejects_simulation(env):
+    phone, session_id = connected(env)
+    path = f"/sessions/{session_id}/order"
+    for fields in [{"simulatePayment": True}, {"paymentMethod": "card"}]:
+        error(env.client.post(path, headers=phone, json={"items": AMERICANO, **fields}), 400, "bad-payment-method")
+    response = env.client.post(path, headers=phone, json={"items": AMERICANO, "paymentMethod": "counter"})
+    assert response.status_code == 201
+    assert response.json()["simulatedApprovedAmount"] is None

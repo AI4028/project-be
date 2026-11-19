@@ -10,6 +10,7 @@ from app.models import Store
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.menu_photos import CatalogMedia
 from app import config
 from app.db import create_tables
 from app.errors import install_error_handlers
@@ -37,7 +38,7 @@ install_error_handlers(app)
 for module in (public, phone, kiosk, ws, demo, places):
     app.include_router(module.router)
 
-app.mount("/media", StaticFiles(directory=config.MEDIA_DIR, check_dir=False), name="media")
+app.mount("/media", CatalogMedia(directory=config.MEDIA_DIR, check_dir=False), name="media")
 
 if config.FRONTEND_DIR:
     app.mount("/app", StaticFiles(directory=config.FRONTEND_DIR, html=True), name="frontend")

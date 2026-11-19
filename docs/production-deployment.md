@@ -115,3 +115,54 @@ DATABASE_URL=sqlite:////home/ec2-user/project-be-prod/linkage.db \
 ```
 
 Never copy development's SQLite database or kiosk key into production.
+
+## Enable menu photo uploads on EC2
+
+1. In CloudFormation in Sydney (`ap-southeast-2`), create a stack from
+   [deploy/menu-photos.yml](../deploy/menu-photos.yml). Use `galjido-dev-menu`
+   for development. Enter the EC2 instance's existing IAM **role name** if it
+   has one. If it has no role, leave the field empty, then attach the stack's
+   `NewInstanceProfile` to the instance under **Actions → Security → Modify IAM role**.
+   Acknowledge IAM resource creation when creating the stack.
+2. For production, create a second stack named `galjido-prod-menu`. On the
+   shared EC2 host, use the same role name (available in the first stack's
+   outputs). Each stack grants access to its own bucket's `menu/` objects.
+3. Add the following to the environment file for **each** service, substituting
+   that environment's `BucketName` output. Development reads
+   `/home/ec2-user/project-be/.env`; production reads
+   `/home/ec2-user/project-be-prod/.env`.
+
+   ```dotenv
+   MENU_PHOTO_BUCKET=<BucketName from this environment's stack>
+   AWS_DEFAULT_REGION=ap-southeast-2
+   ```
+
+4. Deploy the backend. Both workflows copy the four bootstrap JPEGs into S3
+   before restarting the API. On an already upgraded host, run the following
+   in the backend directory for that environment, then restart its service:
+
+   ```sh
+   .venv/bin/python -m scripts.sync_menu_photos
+   ```
+
+5. After the frontend deploys, open `/kiosk`, sign in with the store's kiosk
+   key, and choose **Change menu photo** beside an item. Open the store menu
+   to see the replacement. For a sample, this read-only check follows the API
+   redirect and should return `200 image/jpeg`:
+
+   ```sh
+   curl -fsSL -o /dev/null -w '%{http_code} %{content_type}\n' https://dev.galjido.shop/api/media/menu/americano.jpg
+   ```
+
+The API uses the EC2 role for AWS credentials. The database stores stable
+`/media/menu/...` references. The API redirects image reads to short-lived S3
+URLs. Keep the bucket and its objects alongside your database when restoring a
+deployment. The four tracked JPEGs bootstrap fresh buckets and local demos.
+Staff replacements are stored in S3 and survive application redeployments.
+
+
+If EC2 temporarily lacks S3 access, deployment logs a photo sync warning and
+continues. The API serves bundled sample photos and the kiosk hides its upload
+button until the seed photo is readable in S3. After correcting the role, run
+`.venv/bin/python -m scripts.sync_menu_photos` in the service directory. The
+kiosk checks storage again within a minute.

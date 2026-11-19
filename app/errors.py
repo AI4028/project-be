@@ -20,6 +20,9 @@ class AppError(Exception):
 
 # HTTP status per code; anything else is 400.
 _STATUS = {
+    "photo-storage-unavailable": 503,
+    "photo-too-large": 413,
+    "invalid-photo": 415,
     "places-unavailable": 503,
     "not-signed-in": 401,
     "not-kiosk": 401,
