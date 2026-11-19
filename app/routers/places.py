@@ -19,7 +19,7 @@ from app.routers.public import nearby_stores, store_dict
 router = APIRouter(tags=["places"])
 
 
-def search_text(value: str | None) -> str:
+def _search_text(value: str | None) -> str:
     return "".join((value or "").casefold().split())
 
 
@@ -27,13 +27,13 @@ def registered_places(db: Session, query: str, lat: float | None, lng: float | N
     if not query.strip():
         return nearby_stores(lat, lng, radius_m=5000, db=db)[:15] if lat is not None and lng is not None else []
 
-    search = search_text(query)
+    search = _search_text(query)
     results = (
         store_dict(store, with_menu=False)
         for store in db.scalars(select(Store).order_by(Store.name, Store.id))
-        if any(search in search_text(value) for value in (store.name, store.name_en, store.address))
+        if any(search in _search_text(value) for value in (store.name, store.name_en, store.address))
         or any(
-            search in search_text(item.get(field))
+            search in _search_text(item.get(field))
             for item in (store.menu or [])
             for field in ("name", "nameEn")
         )
@@ -92,7 +92,6 @@ def search_places(q: str = Query("", max_length=100),
     except AppError as error:
         venues, capability = [], "unavailable"
         provider_error = error
-    # Query after the external request so a slow provider cannot hold a SQLite write lock.
     places = [*registered_places(db, q, lat, lng), *(venues or []), *stations]
     if provider_error and not places:
         raise provider_error

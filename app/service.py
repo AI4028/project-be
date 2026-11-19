@@ -316,8 +316,8 @@ def submit_order(
         db.flush()  # a duplicate order number fails here and is retried
         result = event(
             "ordered", session.kiosk_id, now, sessionId=session.id, storeId=session.store_id, orderId=order.id,
-            orderNumber=order.order_number, total=total, summary=summary, status="submitted",
-            paymentMethod=payment_method, note=order.note,
+            orderNumber=order.order_number, total=total, summary=summary, lines=lines, status="submitted",
+            paymentMethod=payment_method, note=order.note, createdAtMs=order.created_at, updatedAtMs=order.updated_at,
         )
         if request_key:
             session.submission = {"key": request_key, "hash": fingerprint, "event": result}
@@ -459,6 +459,16 @@ def order_dict(order: Order) -> dict[str, Any]:
     }
 
 
+def _help_state(session: KioskSession | None) -> str:
+    if session is None:
+        return "idle"
+    if session.help_requested:
+        return "sent"
+    if session.help_resolved_at is not None:
+        return "acknowledged"
+    return "idle"
+
+
 def get_my_order(db: Session, device: Device, order_id: str) -> dict[str, Any]:
     order = db.get(Order, order_id)
     if order is None or order.device_id != device.id:
@@ -466,8 +476,7 @@ def get_my_order(db: Session, device: Device, order_id: str) -> dict[str, Any]:
     session = db.get(KioskSession, order.session_id)
     return {
         **order_dict(order),
-        "helpState": ("sent" if session.help_requested else
-                      "acknowledged" if session.help_resolved_at is not None else "idle") if session else "idle",
+        "helpState": _help_state(session),
     }
 
 
@@ -485,6 +494,7 @@ def session_dict(session: KioskSession) -> dict[str, Any]:
         "storeId": session.store_id,
         "status": session.status,
         "helpRequested": session.help_requested,
+        "helpState": _help_state(session),
         "cart": session.cart,
         "orderId": session.order_id,
         "lastActiveAtMs": session.last_active_at,
