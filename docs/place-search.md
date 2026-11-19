@@ -8,8 +8,10 @@ need a position or a station-name match; no artificial user position is used.
 Set server-only `KAKAO_REST_API_KEY` to enable general venue search. No key is
 bundled in Expo or the browser. The server reads the environment at request time;
 launch with `uvicorn --env-file` if using a private local environment file. The
-JavaScript map key is not a substitute for a Kakao REST key. Provider failure is
-503 with a safe code; missing configuration is distinct from zero matches.
+JavaScript map key is not a substitute for a Kakao REST key. Search also matches
+registered store names, addresses, and menu names. Registered stores and public
+records are still returned during provider failures. A provider failure without
+any fallback matches returns 503. Missing configuration is distinct from zero matches.
 
 `GET /accessibility/nearby?lat=37.55&lng=126.97&radiusM=300` returns up to five
 nearby records per type, source dates, terms and distances. States distinguish
