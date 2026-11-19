@@ -71,6 +71,13 @@ def start_store_ordering(store_id: str, device: Device = Depends(current_device)
     return service.start_store_session(db, device, store_id, now)
 
 
+@router.put("/stores/{store_id}/cart", dependencies=[Depends(pairing_limit)], response_model=SessionOut)
+def prepare_store_cart(store_id: str, body: CartIn, device: Device = Depends(current_device),
+                       db: Session = Depends(get_db), now: int = Depends(get_now)):
+    """Accept a replacement cart without releasing the customer's current session."""
+    return service.start_store_session(db, device, store_id, now, items=body.items)
+
+
 @router.get("/sessions/{session_id}", response_model=SessionOut, response_model_exclude_unset=True)
 def get_session(session_id: str, device: Device = Depends(current_device), db: Session = Depends(get_db), now: int = Depends(get_now)) -> dict[str, Any]:
     return service.get_my_session(db, device, session_id, now)

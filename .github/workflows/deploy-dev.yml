@@ -44,7 +44,7 @@ jobs:
             set -eu
             cd /home/ec2-user/project-be
             .venv/bin/pip install -r requirements.txt
-            .venv/bin/python -m scripts.sync_menu_photos
+            .venv/bin/python -m scripts.sync_menu_photos --allow-offline
             sudo systemctl stop galjido-api
             DATABASE_URL=sqlite:////home/ec2-user/project-be/linkage.db \
               .venv/bin/python -m scripts.migrate

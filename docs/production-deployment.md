@@ -159,3 +159,10 @@ The API uses the EC2 role for AWS credentials. The database stores stable
 URLs. Keep the bucket and its objects alongside your database when restoring a
 deployment. The four tracked JPEGs bootstrap fresh buckets and local demos.
 Staff replacements are stored in S3 and survive application redeployments.
+
+
+If EC2 temporarily lacks S3 access, deployment logs a photo sync warning and
+continues. The API serves bundled sample photos and the kiosk hides its upload
+button until the seed photo is readable in S3. After correcting the role, run
+`.venv/bin/python -m scripts.sync_menu_photos` in the service directory. The
+kiosk checks storage again within a minute.

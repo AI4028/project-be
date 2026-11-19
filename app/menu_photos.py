@@ -2,6 +2,7 @@
 
 import hashlib
 import re
+import time
 from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
@@ -31,6 +32,21 @@ def s3():
 
 def upload_jpeg(key: str, data: bytes) -> None:
     s3().put_object(Bucket=config.MENU_PHOTO_BUCKET, Key=key, Body=data, ContentType="image/jpeg")
+
+
+@lru_cache(maxsize=16)
+def _can_read_sample(bucket: str, key: str, minute: int) -> bool:
+    try:
+        s3().head_object(Bucket=bucket, Key=key)
+        return True
+    except (BotoCoreError, ClientError):
+        return False
+
+
+def sample_in_bucket(key: str) -> bool:
+    return bool(config.MENU_PHOTO_BUCKET) and _can_read_sample(
+        config.MENU_PHOTO_BUCKET, key, int(time.monotonic() // 60)
+    )
 
 
 def save_photo(raw: bytes) -> str:
@@ -74,6 +90,9 @@ class CatalogMedia(StaticFiles):
         if seed and (config.MEDIA_DIR / path).is_file():
             return await super().get_response(path, scope)
         if (seed or UPLOAD_KEY.fullmatch(path)) and scope["method"] in {"HEAD", "GET"}:
+            bundled = seed and (SEED_DIR / seed[1]).is_file()
+            if bundled and not await run_in_threadpool(sample_in_bucket, path):
+                return await StaticFiles(directory=SEED_DIR).get_response(seed[1], scope)
             if config.MENU_PHOTO_BUCKET:
                 url = await run_in_threadpool(signed_photo_url, path, scope["method"])
                 return RedirectResponse(url, headers={"Cache-Control": "no-store"})

@@ -447,7 +447,8 @@ def test_session_help_state_and_ordered_payload_fields(env):
     assert isinstance(order["updatedAtMs"], int)
 
 @pytest.mark.parametrize("method", ["counter", "kiosk", "card", "kakaopay", "tosspay", "naverpay"])
-def test_checkout_method_survives_order_and_staff_lookup(env, method):
+def test_checkout_method_survives_order_and_staff_lookup(env, method, monkeypatch):
+    monkeypatch.setattr(config, "DEMO_MODE", True)
     phone, session_id = connected(env)
     cart = env.client.put(f"/sessions/{session_id}/cart", json={"items": AMERICANO}, headers=phone).json()
     response = env.client.post(
@@ -461,3 +462,29 @@ def test_checkout_method_survives_order_and_staff_lookup(env, method):
     assert order["paymentMethod"] == method
     assert env.client.get(f"/orders/{order['orderId']}", headers=phone).json()["paymentMethod"] == method
     assert env.client.get("/kiosk/orders", headers=env.kiosk).json()[0]["paymentMethod"] == method
+
+
+def test_switch_store_only_replaces_cart_after_destination_accepts(env):
+    phone, old_id = connected(env)
+    previous = env.client.put(f"/sessions/{old_id}/cart", headers=phone, json={"items": AMERICANO}).json()
+    path = "/stores/other-cafe/cart"
+    tea = {"items": [{"itemId": "tea", "qty": 1, "options": {}}]}
+    env.client.put("/kiosk/ordering", headers=env.other_kiosk, json={"paused": True})
+    error(env.client.put(path, headers=phone, json=tea), 409, "ordering-paused")
+    env.client.put("/kiosk/ordering", headers=env.other_kiosk, json={"paused": False})
+    error(env.client.put(path, headers=phone, json={"items": AMERICANO}), 404, "unknown-item")
+    original = env.client.get(f"/sessions/{old_id}", headers=phone).json()
+    assert original["status"] == "active" and original["cart"]["quoteId"] == previous["quoteId"]
+    accepted = env.client.put(path, headers=phone, json=tea).json()
+    assert accepted["cart"]["total"] == 3000
+    assert env.client.put(path, headers=phone, json=tea).json()["sessionId"] == accepted["sessionId"]
+
+
+def test_live_checkout_accepts_payment_at_cafe_and_rejects_simulation(env):
+    phone, session_id = connected(env)
+    path = f"/sessions/{session_id}/order"
+    for fields in [{"simulatePayment": True}, {"paymentMethod": "card"}]:
+        error(env.client.post(path, headers=phone, json={"items": AMERICANO, **fields}), 400, "bad-payment-method")
+    response = env.client.post(path, headers=phone, json={"items": AMERICANO, "paymentMethod": "counter"})
+    assert response.status_code == 201
+    assert response.json()["simulatedApprovedAmount"] is None

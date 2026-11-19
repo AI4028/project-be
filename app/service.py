@@ -188,10 +188,10 @@ def connect_to_kiosk(db: Session, device: Device, kiosk_id: Any, token: Any, now
     return transact(db, run)
 
 
-def start_store_session(db: Session, device: Device, store_id: str, now: int) -> dict[str, Any]:
+def start_store_session(db: Session, device: Device, store_id: str, now: int, *, items: list | None = None) -> dict[str, Any]:
     """Give the phone its own cart without entering the kiosk's active-session slot."""
     def run() -> dict[str, Any]:
-        store = db.get(Store, store_id, populate_existing=True)
+        store = db.get(Store, store_id, populate_existing=True, with_for_update=True)
         if store is None:
             raise AppError("store-not-found", "Store not found.")
         if store.ordering_paused:
@@ -201,6 +201,13 @@ def start_store_session(db: Session, device: Device, store_id: str, now: int) ->
         ).limit(1))
         if staff_terminal is None:
             raise AppError("ordering-unavailable", "This store is not set up to receive phone orders.")
+        # Validate and price a replacement before accepting the destination cart.
+        cart = None
+        if items is not None:
+            if not items:
+                raise AppError("bad-request", "Choose an item before switching stores.")
+            cart = _cart_for(db, store_id, items)
+            cart["quoteId"] = str(uuid.uuid4())
         existing = db.scalar(select(KioskSession).where(
             KioskSession.device_id == device.id,
             KioskSession.store_id == store_id,
@@ -209,6 +216,8 @@ def start_store_session(db: Session, device: Device, store_id: str, now: int) ->
         ).with_for_update().execution_options(populate_existing=True))
         if existing is not None:
             if not _is_idle(existing, now):
+                if cart is not None:
+                    existing.cart = cart
                 existing.last_active_at = now
                 return session_dict(existing)
             existing.status = "expired"
@@ -222,7 +231,7 @@ def start_store_session(db: Session, device: Device, store_id: str, now: int) ->
             created_at=now,
             last_active_at=now,
             help_requested=False,
-            cart={"lines": [], "total": 0, "summary": ""},
+            cart=cart or {"lines": [], "total": 0, "summary": ""},
         )
         db.add(session)
         return session_dict(session)
@@ -279,6 +288,10 @@ def submit_order(
                 if saved["hash"] != fingerprint:
                     raise AppError("idempotency-conflict", "This request key was used with different order details.")
                 return saved["event"]
+        if simulate_payment and not config.DEMO_MODE:
+            raise AppError("bad-payment-method", "Simulated payments are available only in demo mode.")
+        if not simulate_payment and payment_method not in ("counter", "kiosk"):
+            raise AppError("bad-payment-method", "Choose payment at the cafe.")
         session = _own_active_session(db, device, session_id, now)
         lines, total = build_order_lines(store_menu(db, session.store_id, lock=True), items)
         if db.get(Store, session.store_id).ordering_paused:
