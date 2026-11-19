@@ -73,7 +73,7 @@ Item and option IDs come from the store's menu.
 
 - The server calculates prices and checks stock/options. Maximum 20 lines, quantity 1–10 per line. Orders cannot be empty.
 - Single-choice options take a string; multi-choice options take an array. Include every required option.
-- `paymentMethod`: `counter` (default) or `kiosk`. Records where to pay; it does not charge anyone. `note`: up to 200 characters, default empty.
+- `paymentMethod`: `counter` (default), `kiosk`, `card`, `kakaopay`, `tosspay`, or `naverpay`. Passing `simulatePayment: true` records the server-priced `simulatedApprovedAmount` on the order. It represents a prototype approval. Legacy clients omit the flag and continue to settle in store. `note`: up to 200 characters, default empty.
 - Order numbers start at 1 per store and reset at midnight KST. Submission sets the session to `ordered`; start a new session for the next order.
 - Code-free sessions require a configured staff kiosk and use a current `quoteId` and stable `Idempotency-Key` to submit. The staff console receives direct orders and help requests for its store.
 

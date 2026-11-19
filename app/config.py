@@ -17,7 +17,7 @@ SESSION_IDLE_MS = 10 * 60_000
 MAX_LINES_PER_ORDER = 20
 MAX_QTY_PER_LINE = 10
 MAX_NOTE_LENGTH = 200
-PAYMENT_METHODS = ("counter", "kiosk")
+PAYMENT_METHODS = ("counter", "kiosk", "card", "kakaopay", "tosspay", "naverpay")
 
 # Order numbers restart daily at midnight KST.
 KST_OFFSET_MS = 9 * 60 * 60_000

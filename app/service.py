@@ -253,7 +253,7 @@ def sync_cart(db: Session, device: Device, session_id: str, items: Any, now: int
 
 def submit_order(
     db: Session, device: Device, session_id: str, items: Any, payment_method: str, note: str, now: int,
-    quote_id: str | None = None, request_key: str | None = None
+    quote_id: str | None = None, request_key: str | None = None, *, simulate_payment: bool = False,
 ) -> dict[str, Any]:
     if payment_method not in config.PAYMENT_METHODS:
         raise AppError("bad-payment-method", f"paymentMethod must be one of: {', '.join(config.PAYMENT_METHODS)}.")
@@ -262,8 +262,11 @@ def submit_order(
 
     if request_key is not None and not 8 <= len(request_key) <= 128:
         raise AppError("bad-request-key", "Idempotency-Key must be 8-128 characters.")
+    details = {"items": items, "paymentMethod": payment_method, "note": note, "quoteId": quote_id}
+    if simulate_payment:
+        details["simulatePayment"] = True
     fingerprint = hashlib.sha256(json.dumps(
-        {"items": items, "paymentMethod": payment_method, "note": note, "quoteId": quote_id},
+        details,
         sort_keys=True, separators=(",", ":"), ensure_ascii=False,
     ).encode()).hexdigest()
 
@@ -303,6 +306,7 @@ def submit_order(
             summary=summary,
             note=note.strip(),
             payment_method=payment_method,
+            simulated_approved_amount=total if simulate_payment else None,
             status="submitted",
             created_at=now,
             updated_at=now,
@@ -317,6 +321,7 @@ def submit_order(
         result = event(
             "ordered", session.kiosk_id, now, sessionId=session.id, storeId=session.store_id, orderId=order.id,
             orderNumber=order.order_number, total=total, summary=summary, lines=lines, status="submitted",
+            simulatedApprovedAmount=order.simulated_approved_amount,
             paymentMethod=payment_method, note=order.note, createdAtMs=order.created_at, updatedAtMs=order.updated_at,
         )
         if request_key:
@@ -453,6 +458,7 @@ def order_dict(order: Order) -> dict[str, Any]:
         "lines": order.lines,
         "note": order.note,
         "paymentMethod": order.payment_method,
+        "simulatedApprovedAmount": order.simulated_approved_amount,
         "createdAtMs": order.created_at,
         "updatedAtMs": order.updated_at,
         "cancelledBy": order.cancelled_by,

@@ -101,7 +101,7 @@ def place_order(
     now: int = Depends(get_now),
     idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
-    ev = service.submit_order(db, device, session_id, body.items, body.payment_method, body.note, now, body.quote_id, idempotency_key)
+    ev = service.submit_order(db, device, session_id, body.items, body.payment_method, body.note, now, body.quote_id, idempotency_key, simulate_payment=body.simulate_payment)
     background.add_task(hub.publish, ev)
     return ev
 

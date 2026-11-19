@@ -7,9 +7,9 @@ Re-running replaces the store and menu and renames kiosks; keys, sessions and or
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -87,13 +87,22 @@ def load_store(db: Session, data: dict[str, Any]) -> tuple[str, int, int]:
 
 
 def main() -> None:
-    if len(sys.argv) != 2:
-        sys.exit("Usage: python -m scripts.seed <store.json>")
-    data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("file", type=Path)
+    parser.add_argument("--missing-only", action="store_true", help="Preserve already configured stores and kiosks.")
+    args = parser.parse_args()
+    data = json.loads(args.file.read_text(encoding="utf-8"))
+    records = data if isinstance(data, list) else [data]
     create_tables()
     with SessionLocal() as db:
-        store_id, n_menu, n_kiosks = load_store(db, data)
-    print(f"Seeded {store_id}: {n_menu} menu items, {n_kiosks} kiosk(s).")
+        for record in records:
+            if args.missing_only:
+                if db.get(Store, record["storeId"]) is not None:
+                    continue
+                if any(db.get(Kiosk, k["kioskId"]) for k in record.get("kiosks", [])):
+                    raise ValueError(f"Kiosk code already in use for {record['storeId']}.")
+            store_id, n_menu, n_kiosks = load_store(db, record)
+            print(f"Seeded {store_id}: {n_menu} menu items, {n_kiosks} kiosk(s).")
 
 
 if __name__ == "__main__":
