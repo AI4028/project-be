@@ -198,3 +198,12 @@ the original response, even after ordering. Reusing the key with another body
 returns `409 idempotency-conflict`. A session still permits only one order.
 These fields are optional for old clients; safe checkout requires both.
 Migration `0002` must run before starting this release.
+
+### Staff menu photos
+
+`GET /kiosk/state` includes `photoUploadsEnabled`. With S3 configured, send
+raw JPEG, PNG or WebP bytes (up to 1 MiB and 16 megapixels) to
+`PUT /kiosk/menu/{item_id}/photo` with the store's kiosk bearer key. The
+response contains `itemId` and the new stable `imageUrl`. The server resizes
+the photo and strips metadata. Catalog URLs can be fetched without a kiosk
+key. Each read redirects to a short-lived private-bucket URL.

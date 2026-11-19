@@ -78,7 +78,7 @@ def _own_active_session(db: Session, device: Device, session_id: str, now: int) 
     return session
 
 
-def _menu(db: Session, store_id: str, lock: bool = False) -> list[dict[str, Any]]:
+def store_menu(db: Session, store_id: str, lock: bool = False) -> list[dict[str, Any]]:
     store = (db.scalar(select(Store).where(Store.id == store_id).with_for_update()
                        .execution_options(populate_existing=True)) if lock else db.get(Store, store_id))
     if store is None:
@@ -89,7 +89,7 @@ def _menu(db: Session, store_id: str, lock: bool = False) -> list[dict[str, Any]
 def _cart_for(db: Session, store_id: str, items: Any) -> dict[str, Any]:
     if isinstance(items, list) and not items:
         return {"lines": [], "total": 0, "summary": ""}
-    lines, total = build_order_lines(_menu(db, store_id), items)
+    lines, total = build_order_lines(store_menu(db, store_id), items)
     return {"lines": lines, "total": total, "summary": summarize_order(lines)}
 
 
@@ -280,7 +280,7 @@ def submit_order(
                     raise AppError("idempotency-conflict", "This request key was used with different order details.")
                 return saved["event"]
         session = _own_active_session(db, device, session_id, now)
-        lines, total = build_order_lines(_menu(db, session.store_id, lock=True), items)
+        lines, total = build_order_lines(store_menu(db, session.store_id, lock=True), items)
         if db.get(Store, session.store_id).ordering_paused:
             raise AppError("ordering-paused", "This store is not taking phone orders right now.")
         if session.kiosk_id is None and (not quote_id or not request_key):
@@ -586,9 +586,9 @@ def set_ordering_paused(db: Session, kiosk: Kiosk, paused: bool) -> dict[str, An
     return transact(db, run)
 
 
-def set_item_availability(db: Session, kiosk: Kiosk, item_id: str, available: bool) -> dict[str, Any]:
+def update_menu_item(db: Session, store_id: str, item_id: str, changes: dict[str, Any]) -> dict[str, Any]:
     def run() -> dict[str, Any]:
-        store = db.scalar(select(Store).where(Store.id == kiosk.store_id)
+        store = db.scalar(select(Store).where(Store.id == store_id)
                           .with_for_update().execution_options(populate_existing=True))
         if store is None:
             raise AppError("store-not-found", "Store not found.")
@@ -596,9 +596,9 @@ def set_item_availability(db: Session, kiosk: Kiosk, item_id: str, available: bo
         item = next((m for m in menu if m.get("id") == item_id), None)
         if item is None:
             raise AppError("unknown-item", "Item not on this menu.")
-        item["available"] = available
+        item.update(changes)
         store.menu = menu  # new list so SQLAlchemy detects the change
-        return {"itemId": item_id, "available": available}
+        return {"itemId": item_id, **changes}
 
     return transact(db, run)
 

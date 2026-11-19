@@ -183,6 +183,7 @@ class HelpRequest(CamelModel):
 
 
 class KioskState(CamelModel):
+    photo_uploads_enabled: bool = False
     session: SessionOut | None
     orders: list[OrderOut]
     store: StoreOut

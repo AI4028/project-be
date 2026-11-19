@@ -16,6 +16,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.config import MEDIA_DIR
+from app.menu_photos import SEED_DIR, SEED_KEY, UPLOAD_KEY
 from app.db import SessionLocal, create_tables
 from app.models import Kiosk, Store
 
@@ -26,7 +27,14 @@ def check_image(url: Any, owner: str) -> None:
         return
     if not isinstance(url, str) or not (url.startswith("/media/") or url.startswith("https://")):
         raise ValueError(f'{owner}: imageUrl must start with "/media/" or "https://".')
-    if url.startswith("/media/") and not (MEDIA_DIR.parent / url.lstrip("/")).is_file():
+    if url.startswith("/media/"):
+        key = url.removeprefix("/media/")
+        seed = SEED_KEY.fullmatch(key)
+        if UPLOAD_KEY.fullmatch(key) or (seed and (SEED_DIR / seed[1]).is_file()):
+            return
+        local_file = (MEDIA_DIR / key).resolve()
+        if local_file.is_relative_to(MEDIA_DIR) and local_file.is_file():
+            return
         raise ValueError(f"{owner}: photo file not found: {url}")
 
 

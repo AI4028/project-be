@@ -26,6 +26,7 @@ KST_OFFSET_MS = 9 * 60 * 60_000
 CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
 
 # Store and menu photos, served at /media. Seed files point at them as "/media/...".
+MENU_PHOTO_BUCKET = os.getenv("MENU_PHOTO_BUCKET", "").strip()
 MEDIA_DIR = Path(__file__).resolve().parent.parent / "media"
 
 # Optional: serve a built frontend at /app.

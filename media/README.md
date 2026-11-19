@@ -1,11 +1,8 @@
-# Photos
+# Catalog photos
 
-Store and menu photos, served at `/media/...`.
+The menu JPEGs in `seed/menu-photos/` bootstrap fresh S3 buckets and support local
+demos. Staff can replace menu photos from the kiosk once S3 is enabled. See
+[deployment setup](../docs/production-deployment.md#enable-menu-photo-uploads-on-ec2).
 
-1. Put files in a folder per store: `media/gist-cafe/store.jpg`, `media/gist-cafe/americano.jpg`.
-2. Point the seed file at them:
-   - store: `"imageUrl": "/media/gist-cafe/store.jpg"` inside `store`
-   - menu item: `"imageUrl": "/media/gist-cafe/americano.jpg"`
-3. Re-run the seed script. It stops if a file is missing.
-
-Use JPG or WebP, about 800 px wide and under 200 KB. Only use photos you took or have permission to use.
+Store photos and legacy local images are served at their database paths under
+`/media/`. Both store and menu records also accept full HTTPS image URLs.
