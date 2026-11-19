@@ -20,6 +20,7 @@
     "menu": [
       {
         "id": "americano",
+        "imageUrl": "/media/menu/americano.jpg",
         "name": "아메리카노",
         "nameEn": "Americano",
         "description": "",
@@ -30,6 +31,7 @@
       },
       {
         "id": "cafe-latte",
+        "imageUrl": "/media/menu/cafe-latte.jpg",
         "name": "카페 라떼",
         "nameEn": "Cafe Latte",
         "description": "",
@@ -116,6 +118,7 @@
     "menu": [
       {
         "id": "vanilla-latte",
+        "imageUrl": "/media/menu/vanilla-latte.jpg",
         "name": "바닐라 라떼",
         "nameEn": "Vanilla Latte",
         "description": "",
@@ -126,6 +129,7 @@
       },
       {
         "id": "grapefruit-ade",
+        "imageUrl": "/media/menu/grapefruit-ade.jpg",
         "name": "자몽 에이드",
         "nameEn": "Grapefruit Ade",
         "description": "",

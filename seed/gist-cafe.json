@@ -35,6 +35,7 @@
   "menu": [
     {
       "id": "americano",
+      "imageUrl": "/media/menu/americano.jpg",
       "name": "아메리카노",
       "nameEn": "Americano",
       "category": "커피",
@@ -68,6 +69,7 @@
     },
     {
       "id": "cafe-latte",
+      "imageUrl": "/media/menu/cafe-latte.jpg",
       "name": "카페라떼",
       "nameEn": "Cafe Latte",
       "category": "커피",
@@ -94,6 +96,7 @@
     },
     {
       "id": "vanilla-latte",
+      "imageUrl": "/media/menu/vanilla-latte.jpg",
       "name": "바닐라라떼",
       "nameEn": "Vanilla Latte",
       "category": "커피",
@@ -120,6 +123,7 @@
     },
     {
       "id": "grapefruit-ade",
+      "imageUrl": "/media/menu/grapefruit-ade.jpg",
       "name": "자몽에이드",
       "nameEn": "Grapefruit Ade",
       "category": "음료",

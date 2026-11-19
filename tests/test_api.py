@@ -303,6 +303,17 @@ def test_store_info_for_accessibility_and_menus(env):
     assert env.client.get("/kiosks/GK01").json()["name"] == "키오스크 1"
 
 
+def test_seeded_menu_photos_are_served_at_their_database_urls(env):
+    menu = env.client.get("/stores/gist-cafe").json()["menu"]
+    photos = {item["id"]: item["imageUrl"] for item in menu if item.get("imageUrl")}
+    assert set(photos) == {"americano", "cafe-latte", "vanilla-latte", "grapefruit-ade"}
+    for url in photos.values():
+        photo = env.client.get(url)
+        assert photo.status_code == 200
+        assert photo.headers["content-type"] == "image/jpeg"
+        assert photo.content.startswith(b"\xff\xd8\xff")
+
+
 def test_store_pickup_location_and_photos(env):
     from scripts.seed import load_store
 
