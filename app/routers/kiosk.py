@@ -27,7 +27,7 @@ router = APIRouter(prefix="/kiosk", tags=["kiosk"])
 def kiosk_state(kiosk: Kiosk = Depends(current_kiosk), db: Session = Depends(get_db),
                 now: int = Depends(get_now)):
     """Restore the screen after reconnecting, including missed stock changes."""
-    return {"photoUploadsEnabled": bool(config.MENU_PHOTO_BUCKET),
+    return {"photoUploadsEnabled": menu_photos.sample_in_bucket("menu/americano.jpg"),
             "session": service.kiosk_active_session(db, kiosk, now),
             "orders": service.kiosk_orders(db, kiosk, now),
             "store": get_store(kiosk.store_id, db),

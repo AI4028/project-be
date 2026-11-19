@@ -73,7 +73,7 @@ Item and option IDs come from the store's menu.
 
 - The server calculates prices and checks stock/options. Maximum 20 lines, quantity 1–10 per line. Orders cannot be empty.
 - Single-choice options take a string; multi-choice options take an array. Include every required option.
-- `paymentMethod`: `counter` (default), `kiosk`, `card`, `kakaopay`, `tosspay`, or `naverpay`. Passing `simulatePayment: true` records the server-priced `simulatedApprovedAmount` on the order. It represents a prototype approval. Legacy clients omit the flag and continue to settle in store. `note`: up to 200 characters, default empty.
+- For live orders, use `paymentMethod: "counter"` (default) or `"kiosk"`. The customer pays in person. Demo backends with `DEMO_MODE=1` also accept `simulatePayment: true` and the methods `card`, `kakaopay`, `tosspay`, and `naverpay`. Demo orders record a `simulatedApprovedAmount`. Each order accepts a `note` of up to 200 characters.
 - Order numbers start at 1 per store and reset at midnight KST. Submission sets the session to `ordered`; start a new session for the next order.
 - Code-free sessions require a configured staff kiosk and use a current `quoteId` and stable `Idempotency-Key` to submit. The staff console receives direct orders and help requests for its store.
 
@@ -207,3 +207,9 @@ raw JPEG, PNG or WebP bytes (up to 1 MiB and 16 megapixels) to
 response contains `itemId` and the new stable `imageUrl`. The server resizes
 the photo and strips metadata. Catalog URLs can be fetched without a kiosk
 key. Each read redirects to a short-lived private-bucket URL.
+
+
+When a customer confirms a store change, send the new cart's `items` to
+`PUT /stores/{store_id}/cart` with the device token. The response is the
+destination session and server-priced cart. Persist the new session before
+ending the old one. A rejected destination leaves the original cart open.

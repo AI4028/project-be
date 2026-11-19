@@ -74,3 +74,39 @@ def test_upload_disabled_without_bucket(env, monkeypatch):
     monkeypatch.setattr(config, "MENU_PHOTO_BUCKET", "")
     assert not env.client.get("/kiosk/state", headers=env.kiosk).json()["photoUploadsEnabled"]
     assert env.client.put(PATH, headers=env.kiosk, content=b"x").status_code == 503
+
+
+def test_catalog_survives_unavailable_s3_credentials(env, bucket, monkeypatch):
+    from botocore.exceptions import NoCredentialsError
+
+    def unavailable(**kwargs):
+        raise NoCredentialsError()
+
+    menu_photos._can_read_sample.cache_clear()
+    monkeypatch.setattr(bucket, "head_object", unavailable)
+    monkeypatch.setattr(bucket, "put_object", unavailable)
+    sync_samples(allow_offline=True)
+    with pytest.raises(NoCredentialsError):
+        sync_samples()
+    assert not env.client.get("/kiosk/state", headers=env.kiosk).json()["photoUploadsEnabled"]
+    sample = env.client.get(item(env)["imageUrl"], follow_redirects=False)
+    assert sample.status_code == 200 and sample.headers["content-type"] == "image/jpeg"
+
+
+def test_sample_recovers_after_instance_role_is_attached(monkeypatch):
+    from unittest.mock import Mock
+
+    session = Mock()
+    session.get_credentials.side_effect = [None, object()]
+    monkeypatch.setattr(menu_photos.boto3, "Session", lambda: session)
+    menu_photos.s3.cache_clear()
+    menu_photos._can_read_sample.cache_clear()
+    try:
+        assert not menu_photos._can_read_sample(BUCKET, "menu/americano.jpg", 1)
+        session.client.assert_not_called()
+        assert menu_photos._can_read_sample(BUCKET, "menu/americano.jpg", 2)
+        assert menu_photos.s3() is session.client.return_value
+        assert session.client.call_count == 1
+    finally:
+        menu_photos.s3.cache_clear()
+        menu_photos._can_read_sample.cache_clear()
