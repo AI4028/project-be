@@ -292,6 +292,7 @@ def test_a_sent_order_replays_even_after_ordering_is_paused(env):
 def test_store_info_for_accessibility_and_menus(env):
     stores = {s["storeId"]: s for s in env.client.get("/stores").json()}
     gist = stores["gist-cafe"]
+    assert gist["menuSuggestions"][0]["name"] == env.client.get("/stores/gist-cafe").json()["menu"][0]["name"]
     assert "menu" not in gist
     assert gist["location"] == {"lat": 35.2286, "lng": 126.8436}
     assert gist["orderingMethods"] == ["kiosk", "phone", "staff"]
@@ -300,6 +301,17 @@ def test_store_info_for_accessibility_and_menus(env):
     assert [m["id"] for m in menu][:2] == ["americano", "cafe-latte"]
     error(env.client.get("/stores/nope"), 404, "store-not-found")
     assert env.client.get("/kiosks/GK01").json()["name"] == "키오스크 1"
+
+
+def test_seeded_menu_photos_are_served_at_their_database_urls(env):
+    menu = env.client.get("/stores/gist-cafe").json()["menu"]
+    photos = {item["id"]: item["imageUrl"] for item in menu if item.get("imageUrl")}
+    assert set(photos) == {"americano", "cafe-latte", "vanilla-latte", "grapefruit-ade"}
+    for url in photos.values():
+        photo = env.client.get(url)
+        assert photo.status_code == 200
+        assert photo.headers["content-type"] == "image/jpeg"
+        assert photo.content.startswith(b"\xff\xd8\xff")
 
 
 def test_store_pickup_location_and_photos(env):
@@ -433,3 +445,19 @@ def test_session_help_state_and_ordered_payload_fields(env):
     assert order["lines"] == cart["lines"]
     assert isinstance(order["createdAtMs"], int)
     assert isinstance(order["updatedAtMs"], int)
+
+@pytest.mark.parametrize("method", ["counter", "kiosk", "card", "kakaopay", "tosspay", "naverpay"])
+def test_checkout_method_survives_order_and_staff_lookup(env, method):
+    phone, session_id = connected(env)
+    cart = env.client.put(f"/sessions/{session_id}/cart", json={"items": AMERICANO}, headers=phone).json()
+    response = env.client.post(
+        f"/sessions/{session_id}/order",
+        json={"items": AMERICANO, "paymentMethod": method, "simulatePayment": True, "quoteId": cart["quoteId"]},
+        headers=phone,
+    )
+    assert response.status_code == 201, response.text
+    order = response.json()
+    assert order["simulatedApprovedAmount"] == cart["total"]
+    assert order["paymentMethod"] == method
+    assert env.client.get(f"/orders/{order['orderId']}", headers=phone).json()["paymentMethod"] == method
+    assert env.client.get("/kiosk/orders", headers=env.kiosk).json()[0]["paymentMethod"] == method

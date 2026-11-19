@@ -1,0 +1,57 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Private Galjido menu photos for one deployment environment
+Parameters:
+  InstanceRoleName:
+    Type: String
+    Default: ''
+    Description: Existing EC2 role name. Leave empty to create an instance profile.
+Conditions:
+  CreateInstanceRole: !Equals [!Ref InstanceRoleName, '']
+Resources:
+  Photos:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Condition: CreateInstanceRole
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Condition: CreateInstanceRole
+    Properties:
+      Roles: [!Ref InstanceRole]
+  PhotoAccess:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-objects'
+      Roles: [!If [CreateInstanceRole, !Ref InstanceRole, !Ref InstanceRoleName]]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: [s3:GetObject, s3:PutObject]
+            Resource: !Sub '${Photos.Arn}/menu/*'
+Outputs:
+  BucketName:
+    Value: !Ref Photos
+  RoleName:
+    Value: !If [CreateInstanceRole, !Ref InstanceRole, !Ref InstanceRoleName]
+  NewInstanceProfile:
+    Condition: CreateInstanceRole
+    Value: !Ref InstanceProfile

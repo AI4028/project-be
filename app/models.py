@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import false
+from sqlalchemy import exists, false
 from sqlalchemy import JSON, BigInteger, Boolean, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, column_property, mapped_column
 
 from app.db import Base
 
@@ -61,6 +61,12 @@ class Kiosk(Base):
     # Optimistic lock: concurrent writers can't both win; the loser retries (service.transact).
     version: Mapped[int] = mapped_column(Integer, default=1)
     __mapper_args__ = {"version_id_col": version}
+
+
+# Include terminal readiness with store reads so browsing works before provisioning.
+Store.has_order_terminal = column_property(
+    exists().where(Kiosk.store_id == Store.id, Kiosk.api_key_hash.is_not(None)).correlate(Store)
+)
 
 
 class Device(Base):
@@ -121,6 +127,7 @@ class Order(Base):
     total: Mapped[int] = mapped_column(Integer)
     summary: Mapped[str] = mapped_column(Text)
     note: Mapped[str] = mapped_column(Text, default="")
+    simulated_approved_amount: Mapped[int | None] = mapped_column(Integer)
     payment_method: Mapped[str] = mapped_column(String(16))
     # submitted | accepted | preparing | ready | picked_up | cancelled
     status: Mapped[str] = mapped_column(String(16))

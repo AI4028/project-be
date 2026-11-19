@@ -78,7 +78,7 @@ def _own_active_session(db: Session, device: Device, session_id: str, now: int) 
     return session
 
 
-def _menu(db: Session, store_id: str, lock: bool = False) -> list[dict[str, Any]]:
+def store_menu(db: Session, store_id: str, lock: bool = False) -> list[dict[str, Any]]:
     store = (db.scalar(select(Store).where(Store.id == store_id).with_for_update()
                        .execution_options(populate_existing=True)) if lock else db.get(Store, store_id))
     if store is None:
@@ -89,7 +89,7 @@ def _menu(db: Session, store_id: str, lock: bool = False) -> list[dict[str, Any]
 def _cart_for(db: Session, store_id: str, items: Any) -> dict[str, Any]:
     if isinstance(items, list) and not items:
         return {"lines": [], "total": 0, "summary": ""}
-    lines, total = build_order_lines(_menu(db, store_id), items)
+    lines, total = build_order_lines(store_menu(db, store_id), items)
     return {"lines": lines, "total": total, "summary": summarize_order(lines)}
 
 
@@ -253,7 +253,7 @@ def sync_cart(db: Session, device: Device, session_id: str, items: Any, now: int
 
 def submit_order(
     db: Session, device: Device, session_id: str, items: Any, payment_method: str, note: str, now: int,
-    quote_id: str | None = None, request_key: str | None = None
+    quote_id: str | None = None, request_key: str | None = None, *, simulate_payment: bool = False,
 ) -> dict[str, Any]:
     if payment_method not in config.PAYMENT_METHODS:
         raise AppError("bad-payment-method", f"paymentMethod must be one of: {', '.join(config.PAYMENT_METHODS)}.")
@@ -262,8 +262,11 @@ def submit_order(
 
     if request_key is not None and not 8 <= len(request_key) <= 128:
         raise AppError("bad-request-key", "Idempotency-Key must be 8-128 characters.")
+    details = {"items": items, "paymentMethod": payment_method, "note": note, "quoteId": quote_id}
+    if simulate_payment:
+        details["simulatePayment"] = True
     fingerprint = hashlib.sha256(json.dumps(
-        {"items": items, "paymentMethod": payment_method, "note": note, "quoteId": quote_id},
+        details,
         sort_keys=True, separators=(",", ":"), ensure_ascii=False,
     ).encode()).hexdigest()
 
@@ -277,7 +280,7 @@ def submit_order(
                     raise AppError("idempotency-conflict", "This request key was used with different order details.")
                 return saved["event"]
         session = _own_active_session(db, device, session_id, now)
-        lines, total = build_order_lines(_menu(db, session.store_id, lock=True), items)
+        lines, total = build_order_lines(store_menu(db, session.store_id, lock=True), items)
         if db.get(Store, session.store_id).ordering_paused:
             raise AppError("ordering-paused", "This store is not taking phone orders right now.")
         if session.kiosk_id is None and (not quote_id or not request_key):
@@ -303,6 +306,7 @@ def submit_order(
             summary=summary,
             note=note.strip(),
             payment_method=payment_method,
+            simulated_approved_amount=total if simulate_payment else None,
             status="submitted",
             created_at=now,
             updated_at=now,
@@ -317,6 +321,7 @@ def submit_order(
         result = event(
             "ordered", session.kiosk_id, now, sessionId=session.id, storeId=session.store_id, orderId=order.id,
             orderNumber=order.order_number, total=total, summary=summary, lines=lines, status="submitted",
+            simulatedApprovedAmount=order.simulated_approved_amount,
             paymentMethod=payment_method, note=order.note, createdAtMs=order.created_at, updatedAtMs=order.updated_at,
         )
         if request_key:
@@ -453,6 +458,7 @@ def order_dict(order: Order) -> dict[str, Any]:
         "lines": order.lines,
         "note": order.note,
         "paymentMethod": order.payment_method,
+        "simulatedApprovedAmount": order.simulated_approved_amount,
         "createdAtMs": order.created_at,
         "updatedAtMs": order.updated_at,
         "cancelledBy": order.cancelled_by,
@@ -580,9 +586,9 @@ def set_ordering_paused(db: Session, kiosk: Kiosk, paused: bool) -> dict[str, An
     return transact(db, run)
 
 
-def set_item_availability(db: Session, kiosk: Kiosk, item_id: str, available: bool) -> dict[str, Any]:
+def update_menu_item(db: Session, store_id: str, item_id: str, changes: dict[str, Any]) -> dict[str, Any]:
     def run() -> dict[str, Any]:
-        store = db.scalar(select(Store).where(Store.id == kiosk.store_id)
+        store = db.scalar(select(Store).where(Store.id == store_id)
                           .with_for_update().execution_options(populate_existing=True))
         if store is None:
             raise AppError("store-not-found", "Store not found.")
@@ -590,9 +596,9 @@ def set_item_availability(db: Session, kiosk: Kiosk, item_id: str, available: bo
         item = next((m for m in menu if m.get("id") == item_id), None)
         if item is None:
             raise AppError("unknown-item", "Item not on this menu.")
-        item["available"] = available
+        item.update(changes)
         store.menu = menu  # new list so SQLAlchemy detects the change
-        return {"itemId": item_id, "available": available}
+        return {"itemId": item_id, **changes}
 
     return transact(db, run)
 

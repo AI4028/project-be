@@ -73,7 +73,7 @@ Item and option IDs come from the store's menu.
 
 - The server calculates prices and checks stock/options. Maximum 20 lines, quantity 1–10 per line. Orders cannot be empty.
 - Single-choice options take a string; multi-choice options take an array. Include every required option.
-- `paymentMethod`: `counter` (default) or `kiosk`. Records where to pay; it does not charge anyone. `note`: up to 200 characters, default empty.
+- `paymentMethod`: `counter` (default), `kiosk`, `card`, `kakaopay`, `tosspay`, or `naverpay`. Passing `simulatePayment: true` records the server-priced `simulatedApprovedAmount` on the order. It represents a prototype approval. Legacy clients omit the flag and continue to settle in store. `note`: up to 200 characters, default empty.
 - Order numbers start at 1 per store and reset at midnight KST. Submission sets the session to `ordered`; start a new session for the next order.
 - Code-free sessions require a configured staff kiosk and use a current `quoteId` and stable `Idempotency-Key` to submit. The staff console receives direct orders and help requests for its store.
 
@@ -198,3 +198,12 @@ the original response, even after ordering. Reusing the key with another body
 returns `409 idempotency-conflict`. A session still permits only one order.
 These fields are optional for old clients; safe checkout requires both.
 Migration `0002` must run before starting this release.
+
+### Staff menu photos
+
+`GET /kiosk/state` includes `photoUploadsEnabled`. With S3 configured, send
+raw JPEG, PNG or WebP bytes (up to 1 MiB and 16 megapixels) to
+`PUT /kiosk/menu/{item_id}/photo` with the store's kiosk bearer key. The
+response contains `itemId` and the new stable `imageUrl`. The server resizes
+the photo and strips metadata. Catalog URLs can be fetched without a kiosk
+key. Each read redirects to a short-lived private-bucket URL.

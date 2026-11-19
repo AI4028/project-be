@@ -7,15 +7,16 @@ Re-running replaces the store and menu and renames kiosks; keys, sessions and or
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
-import sys
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.config import MEDIA_DIR
+from app.menu_photos import SEED_DIR, SEED_KEY, UPLOAD_KEY
 from app.db import SessionLocal, create_tables
 from app.models import Kiosk, Store
 
@@ -26,7 +27,14 @@ def check_image(url: Any, owner: str) -> None:
         return
     if not isinstance(url, str) or not (url.startswith("/media/") or url.startswith("https://")):
         raise ValueError(f'{owner}: imageUrl must start with "/media/" or "https://".')
-    if url.startswith("/media/") and not (MEDIA_DIR.parent / url.lstrip("/")).is_file():
+    if url.startswith("/media/"):
+        key = url.removeprefix("/media/")
+        seed = SEED_KEY.fullmatch(key)
+        if UPLOAD_KEY.fullmatch(key) or (seed and (SEED_DIR / seed[1]).is_file()):
+            return
+        local_file = (MEDIA_DIR / key).resolve()
+        if local_file.is_relative_to(MEDIA_DIR) and local_file.is_file():
+            return
         raise ValueError(f"{owner}: photo file not found: {url}")
 
 
@@ -87,13 +95,22 @@ def load_store(db: Session, data: dict[str, Any]) -> tuple[str, int, int]:
 
 
 def main() -> None:
-    if len(sys.argv) != 2:
-        sys.exit("Usage: python -m scripts.seed <store.json>")
-    data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("file", type=Path)
+    parser.add_argument("--missing-only", action="store_true", help="Preserve already configured stores and kiosks.")
+    args = parser.parse_args()
+    data = json.loads(args.file.read_text(encoding="utf-8"))
+    records = data if isinstance(data, list) else [data]
     create_tables()
     with SessionLocal() as db:
-        store_id, n_menu, n_kiosks = load_store(db, data)
-    print(f"Seeded {store_id}: {n_menu} menu items, {n_kiosks} kiosk(s).")
+        for record in records:
+            if args.missing_only:
+                if db.get(Store, record["storeId"]) is not None:
+                    continue
+                if any(db.get(Kiosk, k["kioskId"]) for k in record.get("kiosks", [])):
+                    raise ValueError(f"Kiosk code already in use for {record['storeId']}.")
+            store_id, n_menu, n_kiosks = load_store(db, record)
+            print(f"Seeded {store_id}: {n_menu} menu items, {n_kiosks} kiosk(s).")
 
 
 if __name__ == "__main__":
