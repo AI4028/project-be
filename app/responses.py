@@ -26,6 +26,11 @@ class StoreOut(CamelModel):
     accessibility: dict[str, Any]
     kiosk_features: dict[str, Any]
     indoor_directions: str | None
+    pickup_location: str | None = None
+    image_url: str | None = None
+    phone: str | None = None
+    hours: str | None = None
+    hours_en: str | None = None
     ordering_paused: bool = False
     menu: list[dict[str, Any]] | None = None
     distance_m: int | None = None

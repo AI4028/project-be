@@ -1,4 +1,4 @@
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from app import accessibility
 from app.routers import places
 import hashlib
@@ -72,6 +72,23 @@ def test_provider_error_does_not_expose_credentials(env, monkeypatch):
     response = env.client.get("/places/search", params={"q": "unlikely-venue-xyz-123"})
     assert response.status_code == 503
     assert "secret-test-key" not in response.text
+
+
+def test_registered_store_and_menu_search_survive_provider_denial(env, monkeypatch):
+    monkeypatch.setenv("KAKAO_REST_API_KEY", "test-key")
+
+    def denied(request, timeout):
+        raise HTTPError(request.full_url, 401, "Access denied", {}, None)
+
+    monkeypatch.setattr(places, "urlopen", denied)
+    for query in ("GIST", "아메리카노", "AMERICANO"):
+        response = env.client.get("/places/search", params={"q": query})
+        assert response.status_code == 200
+        result = response.json()
+        assert result["status"] == "results"
+        assert result["generalSearch"] == "unavailable"
+        assert [place["storeId"] for place in result["places"]] == ["gist-cafe"]
+        assert not result["places"][0].get("directoryOnly")
 
 def test_coordinate_validation_and_coverage(env):
     assert env.client.get("/places/search?lat=37").status_code == 400
