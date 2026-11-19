@@ -27,7 +27,13 @@ class Store(Base):
     accessibility: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     kiosk_features: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     indoor_directions: Mapped[str | None] = mapped_column(Text)
-    # [{id, name, nameEn, category, sortOrder, price, available, description,
+    # Where finished orders wait, e.g. "카운터 오른쪽 낮은 선반, 높이 약 75cm".
+    pickup_location: Mapped[str | None] = mapped_column(Text)
+    image_url: Mapped[str | None] = mapped_column(String(500))
+    phone: Mapped[str | None] = mapped_column(String(30))
+    hours: Mapped[str | None] = mapped_column(String(100))  # e.g. "09:00–21:00"
+    hours_en: Mapped[str | None] = mapped_column(String(100))
+    # [{id, name, nameEn, category, sortOrder, price, available, description, imageUrl,
     #   options: [{id, name, type, required, maxChoices,
     #              choices: [{id, name, priceDelta, available}]}]}]
     menu: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)

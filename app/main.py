@@ -37,6 +37,8 @@ install_error_handlers(app)
 for module in (public, phone, kiosk, ws, demo, places):
     app.include_router(module.router)
 
+app.mount("/media", StaticFiles(directory=config.MEDIA_DIR, check_dir=False), name="media")
+
 if config.FRONTEND_DIR:
     app.mount("/app", StaticFiles(directory=config.FRONTEND_DIR, html=True), name="frontend")
 
