@@ -1,0 +1,53 @@
+name: Deploy production backend
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prod-backend-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+      - name: Trust deployment host
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.EC2_HOST_KEY }}" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Upload backend
+        run: |
+          rsync -az --delete \
+            --exclude '.env' \
+            --exclude '.venv/' \
+            --exclude 'linkage.db*' \
+            --exclude '__pycache__/' \
+            ./ "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/project-be-prod/"
+
+      - name: Migrate and restart backend
+        run: |
+          ssh "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" <<'EOF'
+            set -eu
+            cd /home/ec2-user/project-be-prod
+            .venv/bin/pip install -r requirements.txt
+            sudo systemctl stop galjido-api-prod
+            DATABASE_URL=sqlite:////home/ec2-user/project-be-prod/linkage.db \
+              .venv/bin/python -m scripts.migrate
+            sudo systemctl start galjido-api-prod
+            curl --retry 10 --retry-connrefused --retry-delay 2 \
+              --fail http://127.0.0.1:8001/health
+          EOF
