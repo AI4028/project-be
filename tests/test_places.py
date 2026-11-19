@@ -101,3 +101,14 @@ def test_station_voice_guides_are_marked_as_approximate():
     record = accessibility.records("voice_guides")[0]
     result = accessibility.nearby("voice_guides", record[1], record[2], radius=100)
     assert result["items"][0]["coordinatePrecision"] == "station"
+
+
+def test_place_search_matches_registered_store_menus_even_when_provider_fails(env, monkeypatch):
+    monkeypatch.setenv("KAKAO_REST_API_KEY", "test-key")
+    def fail(*args, **kwargs):
+        raise URLError("offline")
+    monkeypatch.setattr(places, "urlopen", fail)
+    result = env.client.get("/places/search", params={"q": "아메리카노"}).json()
+    assert result["status"] == "results"
+    assert result["generalSearch"] == "unavailable"
+    assert any(place["storeId"] == "gist-cafe" for place in result["places"])
