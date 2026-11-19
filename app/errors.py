@@ -34,6 +34,7 @@ _STATUS = {
     "demo-disabled": 404,
     "kiosk-busy": 409,
     "ordering-paused": 409,
+    "ordering-unavailable": 409,
     "session-expired": 409,
     "item-unavailable": 409,
     "choice-unavailable": 409,

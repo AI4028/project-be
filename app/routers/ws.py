@@ -40,10 +40,10 @@ async def listen(ws: WebSocket, *channels: str) -> None:
 # that holds the lock.
 
 
-def _kiosk_channel(token: str) -> tuple[str, str] | None:
+def _kiosk_channel(token: str) -> tuple[str, str, str] | None:
     with database.SessionLocal() as db:
         kiosk = kiosk_for_key(db, token)
-        return (f"kiosk:{kiosk.id}", f"store:{kiosk.store_id}") if kiosk else None
+        return (f"kiosk:{kiosk.id}", f"store:{kiosk.store_id}", f"staff-store:{kiosk.store_id}") if kiosk else None
 
 
 def _session_channel(session_id: str, token: str) -> tuple[str, str] | int:

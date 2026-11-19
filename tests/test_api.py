@@ -44,6 +44,50 @@ def error(res, status: int, code: str) -> None:
 # ---------- tests ----------
 
 
+def test_store_order_does_not_reserve_kiosk_and_reaches_only_store_staff(env):
+    paired_phone, paired_id = connected(env)
+    customer = new_phone(env)
+    store_url = "/stores/gist-cafe/sessions"
+    response = env.client.post(store_url, headers=customer)
+    assert response.status_code == 201, response.text
+    cart_id = response.json()["sessionId"]
+    assert response.json()["kioskId"] is None
+    assert env.client.post(store_url, headers=customer).json()["sessionId"] == cart_id
+    assert env.client.get("/kiosk/session", headers=env.kiosk).json()["sessionId"] == paired_id
+    error(env.client.get(f"/sessions/{cart_id}", headers=paired_phone), 404, "session-not-found")
+
+    with env.client.websocket_connect(f"/ws/kiosk?token={env.kiosk_key}") as staff:
+        cart_url = f"/sessions/{cart_id}/cart"
+        quote = env.client.put(cart_url, json={"items": AMERICANO}, headers=customer).json()
+        order_url = f"/sessions/{cart_id}/order"
+        error(env.client.post(order_url, json={"items": AMERICANO}, headers=customer), 409, "price-changed")
+        body = {"items": AMERICANO, "quoteId": quote["quoteId"], "paymentMethod": "kiosk"}
+        headers = {**customer, "Idempotency-Key": f"order:{cart_id}"}
+        assert env.client.put("/kiosk/ordering", json={"paused": True}, headers=env.kiosk).status_code == 200
+        assert staff.receive_json()["type"] == "ordering"
+        error(env.client.post(order_url, json=body, headers=headers), 409, "ordering-paused")
+        assert env.client.put("/kiosk/ordering", json={"paused": False}, headers=env.kiosk).status_code == 200
+        assert staff.receive_json()["type"] == "ordering"
+        order = env.client.post(order_url, json=body, headers=headers).json()
+        assert order["total"] == quote["total"]
+        assert staff.receive_json()["type"] == "ordered"
+        assert env.client.post(order_url, json=body, headers=headers).json()["orderId"] == order["orderId"]
+
+    order_id = order["orderId"]
+    assert env.client.get("/orders", headers=customer).json()[0]["storeId"] == "gist-cafe"
+    assert env.client.get("/orders", headers=paired_phone).json() == []
+    assert env.client.get("/kiosk/orders", headers=env.other_kiosk).json() == []
+    assert env.client.get("/kiosk/session", headers=env.kiosk).json()["sessionId"] == paired_id
+    assert env.client.post(f"/orders/{order_id}/help", headers=customer).status_code == 200
+    assert env.client.get("/kiosk/state", headers=env.kiosk).json()["helpRequests"] == [
+        {"sessionId": cart_id, "orderNumber": order["orderNumber"]},
+    ]
+    error(env.client.post(f"/kiosk/sessions/{cart_id}/resolve-help", headers=env.other_kiosk), 404, "session-not-found")
+    assert env.client.post(f"/kiosk/sessions/{cart_id}/resolve-help", headers=env.kiosk).status_code == 200
+    assert env.client.get(f"/orders/{order_id}", headers=customer).json()["helpState"] == "acknowledged"
+    assert env.client.get("/kiosk/state", headers=env.kiosk).json()["helpRequests"] == []
+
+
 def test_full_flow_with_live_updates(env):
     phone = new_phone(env)
     with env.client.websocket_connect(f"/ws/kiosk?token={env.kiosk_key}") as kiosk_ws:

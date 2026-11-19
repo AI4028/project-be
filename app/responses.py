@@ -73,7 +73,7 @@ class CartOut(CamelModel):
 
 class SessionOut(CamelModel):
     session_id: str
-    kiosk_id: str
+    kiosk_id: str | None
     store_id: str
     status: Literal['active', 'ordered', 'ended', 'expired']
     help_requested: bool
@@ -88,7 +88,8 @@ OrderStatus = Literal['submitted', 'accepted', 'preparing', 'ready', 'picked_up'
 class OrderOut(CamelModel):
     order_id: str
     order_number: int
-    kiosk_id: str
+    kiosk_id: str | None
+    store_id: str
     session_id: str
     status: OrderStatus
     total: int
@@ -98,10 +99,12 @@ class OrderOut(CamelModel):
     payment_method: Literal['counter', 'kiosk']
     created_at_ms: int
     updated_at_ms: int
+    help_state: Literal['idle', 'sent', 'acknowledged'] = 'idle'
+    cancelled_by: Literal['customer', 'staff'] | None = None
 
 
 class Event(CamelModel):
-    kiosk_id: str
+    kiosk_id: str | None
     session_id: str
     store_id: str
     at_ms: int
@@ -130,6 +133,8 @@ class Ordered(Event):
 
 class HelpEvent(Event):
     type: Literal['help', 'help_resolved']
+    order_id: str | None = None
+    order_number: int | None = None
 
 
 class Ended(Event):
@@ -159,10 +164,16 @@ class ProximityOut(CamelModel):
     distance: float
 
 
+class HelpRequest(CamelModel):
+    session_id: str
+    order_number: int | None
+
+
 class KioskState(CamelModel):
     session: SessionOut | None
     orders: list[OrderOut]
     store: StoreOut
+    help_requests: list[HelpRequest]
 
 
 class PhoneState(CamelModel):

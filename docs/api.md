@@ -44,6 +44,7 @@ Functions: [phone.py](../app/routers/phone.py). Phone auth required except regis
 | `DELETE /devices/me` | `revoke_device` | Revokes the current phone token, releases its active kiosks and closes its sockets. |
 | `POST /devices` | `register_device` | No body → anonymous `deviceId` and `token`; no sign-up. |
 | `POST /sessions` | `connect` | `kioskId`, `token` → `connected` event with `sessionId`, store and kiosk details. |
+| `POST /stores/{store_id}/sessions` | `start_store_ordering` | No body → active cart session for the authenticated device and store. `kioskId` is null. A repeated request restores an active cart. |
 | `GET /sessions/{session_id}/state` | `phone_state` | Own session, order (or `null`) and current store/menu for reconnect recovery. |
 | `GET /sessions/{session_id}` | `get_session` | No body → own session: status, cart, help flag, order ID and last activity time. |
 | `PUT /sessions/{session_id}/cart` | `update_cart` | `items` → replaces the cart; returns `cart` event with priced `lines`, `total`, `summary`. `[]` clears it. |
@@ -51,6 +52,8 @@ Functions: [phone.py](../app/routers/phone.py). Phone auth required except regis
 | `POST /sessions/{session_id}/help` | `ask_for_help` | No body → flags the session for staff; returns `help` event. |
 | `POST /sessions/{session_id}/end` | `disconnect` | No body → disconnects; returns `ended` event. Does not cancel an order. |
 | `GET /orders/{order_id}` | `get_order` | No body → own order: status, lines, total, summary, payment choice, note and timestamps. |
+| `GET /orders` | `my_orders` | No body → up to 50 recent orders owned by this device. |
+| `POST /orders/{order_id}/help` | `ask_for_order_help` | No body → request staff help for an open order owned by this device. |
 | `POST /orders/{order_id}/cancel` | `cancel_order` | No body → cancels a `submitted` order; returns `order_status` event. |
 
 ### Cart and order body
@@ -71,7 +74,8 @@ Item and option IDs come from the store's menu.
 - The server calculates prices and checks stock/options. Maximum 20 lines, quantity 1–10 per line. Orders cannot be empty.
 - Single-choice options take a string; multi-choice options take an array. Include every required option.
 - `paymentMethod`: `counter` (default) or `kiosk`. Records where to pay; it does not charge anyone. `note`: up to 200 characters, default empty.
-- Order numbers start at 1 per store and reset at midnight KST. Submission sets the session to `ordered`; pair again for another order.
+- Order numbers start at 1 per store and reset at midnight KST. Submission sets the session to `ordered`; start a new session for the next order.
+- Code-free sessions require a configured staff kiosk and use a current `quoteId` and stable `Idempotency-Key` to submit. The staff console receives direct orders and help requests for its store.
 
 ## Kiosk endpoints
 

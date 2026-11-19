@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import false
-from sqlalchemy import JSON, BigInteger, Boolean, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, BigInteger, Boolean, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -68,12 +68,19 @@ class Device(Base):
 
 
 class KioskSession(Base):
-    """One phone connected to one kiosk."""
+    """A phone ordering at a store, optionally paired to a kiosk."""
 
     __tablename__ = "sessions"
+    __table_args__ = (
+        Index(
+            "uq_active_store_session", "device_id", "store_id", unique=True,
+            sqlite_where=text("kiosk_id IS NULL AND status = 'active'"),
+            postgresql_where=text("kiosk_id IS NULL AND status = 'active'"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    kiosk_id: Mapped[str] = mapped_column(ForeignKey("kiosks.id"))
+    kiosk_id: Mapped[str | None] = mapped_column(ForeignKey("kiosks.id"))
     store_id: Mapped[str] = mapped_column(ForeignKey("stores.id"))
     device_id: Mapped[str] = mapped_column(ForeignKey("devices.id"))
     status: Mapped[str] = mapped_column(String(16))  # active | ordered | ended | expired
@@ -99,7 +106,7 @@ class Order(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     store_id: Mapped[str] = mapped_column(ForeignKey("stores.id"))
-    kiosk_id: Mapped[str] = mapped_column(ForeignKey("kiosks.id"))
+    kiosk_id: Mapped[str | None] = mapped_column(ForeignKey("kiosks.id"))
     session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id"))
     device_id: Mapped[str] = mapped_column(ForeignKey("devices.id"))
     kst_day: Mapped[str] = mapped_column(String(10))  # "2026-10-08"
