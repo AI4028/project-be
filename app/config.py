@@ -1,6 +1,7 @@
 """Settings, read from environment variables."""
 
 import os
+from pathlib import Path
 
 # SQLite locally. In production, e.g. postgresql+psycopg://user:password@host:5432/galjido
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./galjido.db")
@@ -23,6 +24,9 @@ KST_OFFSET_MS = 9 * 60 * 60_000
 
 # Comma-separated browser origins ("*" = any). The frontend is served from its own repo.
 CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
+
+# Store and menu photos, served at /media. Seed files point at them as "/media/...".
+MEDIA_DIR = Path(__file__).resolve().parent.parent / "media"
 
 # Optional: serve a built frontend at /app.
 FRONTEND_DIR = os.getenv("FRONTEND_DIR") or None

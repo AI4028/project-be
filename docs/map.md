@@ -35,7 +35,8 @@ Draft. See open questions below.
 - `GET /stores/nearby?lat=&lng=&radiusM=`: nearest first, with `distanceM`
   and `insideGeofence`.
 - `GET /stores/{id}`: `location`, `geofenceRadiusM`, `orderingMethods`,
-  `accessibility`, `kioskFeatures`, `indoorDirections`.
+  `accessibility`, `kioskFeatures`, `indoorDirections`, `pickupLocation`,
+  `imageUrl`, `phone`, `hours`, `hoursEn`. Menu items can carry `imageUrl` too; see [media/README.md](../media/README.md).
 
 `accessibility` holds `floor`, `stepFreeEntrance`, `automaticDoor`,
 `elevator`, `accessibleRestroom` and `notes`. Planned: step height, ramp,

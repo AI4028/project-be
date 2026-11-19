@@ -15,8 +15,19 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.config import MEDIA_DIR
 from app.db import SessionLocal, create_tables
 from app.models import Kiosk, Store
+
+
+def check_image(url: Any, owner: str) -> None:
+    """Photos are files under media/ ("/media/...") or full https URLs."""
+    if url is None:
+        return
+    if not isinstance(url, str) or not (url.startswith("/media/") or url.startswith("https://")):
+        raise ValueError(f'{owner}: imageUrl must start with "/media/" or "https://".')
+    if url.startswith("/media/") and not (MEDIA_DIR.parent / url.lstrip("/")).is_file():
+        raise ValueError(f"{owner}: photo file not found: {url}")
 
 
 def load_store(db: Session, data: dict[str, Any]) -> tuple[str, int, int]:
@@ -34,6 +45,11 @@ def load_store(db: Session, data: dict[str, Any]) -> tuple[str, int, int]:
         seen.add(item["id"])
         if not isinstance(item.get("price"), int) or item["price"] < 0:
             raise ValueError(f"{item['id']}: price must be a whole number of won.")
+        check_image(item.get("imageUrl"), item["id"])
+    check_image(info.get("imageUrl"), store_id)
+    phone = info.get("phone")
+    if phone is not None and not re.fullmatch(r"\+?[0-9][0-9-]{6,18}", phone):
+        raise ValueError(f"{store_id}: phone must be digits and dashes, e.g. 062-715-0000.")
     for k in kiosks:
         if not re.fullmatch(r"[A-Z0-9]{4}", k.get("kioskId", "")):
             raise ValueError(f"Kiosk ID {k.get('kioskId')!r} must be 4 characters, A-Z and 0-9.")
@@ -50,6 +66,11 @@ def load_store(db: Session, data: dict[str, Any]) -> tuple[str, int, int]:
     store.accessibility = info.get("accessibility", {})
     store.kiosk_features = info.get("kioskFeatures", {})
     store.indoor_directions = info.get("indoorDirections")
+    store.pickup_location = info.get("pickupLocation")
+    store.image_url = info.get("imageUrl")
+    store.phone = info.get("phone")
+    store.hours = info.get("hours")
+    store.hours_en = info.get("hoursEn")
     store.menu = menu
     db.add(store)
     db.flush()
