@@ -64,6 +64,13 @@ def connect(
     return ev
 
 
+@router.post("/stores/{store_id}/sessions", dependencies=[Depends(pairing_limit)], status_code=201, response_model=SessionOut)
+def start_store_ordering(store_id: str, device: Device = Depends(current_device),
+                         db: Session = Depends(get_db), now: int = Depends(get_now)):
+    """Start or recover a cart for this phone at a store without reserving a kiosk."""
+    return service.start_store_session(db, device, store_id, now)
+
+
 @router.get("/sessions/{session_id}", response_model=SessionOut, response_model_exclude_unset=True)
 def get_session(session_id: str, device: Device = Depends(current_device), db: Session = Depends(get_db), now: int = Depends(get_now)) -> dict[str, Any]:
     return service.get_my_session(db, device, session_id, now)
@@ -125,9 +132,24 @@ def disconnect(
     return ev
 
 
+@router.get("/orders", response_model=list[OrderOut], response_model_exclude_unset=True)
+def my_orders(device: Device = Depends(current_device), db: Session = Depends(get_db)):
+    """List the most recent orders belonging to this phone."""
+    return service.get_my_orders(db, device)
+
+
 @router.get("/orders/{order_id}", response_model=OrderOut, response_model_exclude_unset=True)
 def get_order(order_id: str, device: Device = Depends(current_device), db: Session = Depends(get_db)) -> dict[str, Any]:
     return service.get_my_order(db, device, order_id)
+
+
+@router.post("/orders/{order_id}/help", dependencies=[Depends(pairing_limit)], response_model=HelpEvent)
+def ask_for_order_help(order_id: str, background: BackgroundTasks,
+                       device: Device = Depends(current_device), db: Session = Depends(get_db),
+                       now: int = Depends(get_now)):
+    ev = service.request_order_help(db, device, order_id, now)
+    background.add_task(hub.publish, ev)
+    return ev
 
 
 @router.post("/orders/{order_id}/cancel", response_model=OrderEvent, response_model_exclude_unset=True)

@@ -52,12 +52,19 @@ def transact(db: Session, fn: Callable[[], T], attempts: int = 5) -> T:
     raise RuntimeError("unreachable")
 
 
-def event(type_: str, kiosk_id: str, now: int, **fields: Any) -> dict[str, Any]:
+def event(type_: str, kiosk_id: str | None, now: int, **fields: Any) -> dict[str, Any]:
     return {"type": type_, "kioskId": kiosk_id, "atMs": now, **fields}
 
 
 def _is_idle(session: KioskSession, now: int) -> bool:
     return session.last_active_at + config.SESSION_IDLE_MS <= now
+
+
+def _release_kiosk(db: Session, session: KioskSession) -> None:
+    if session.kiosk_id is not None:
+        kiosk = db.get(Kiosk, session.kiosk_id, populate_existing=True)
+        if kiosk is not None and kiosk.active_session_id == session.id:
+            kiosk.active_session_id = None
 
 
 def _own_active_session(db: Session, device: Device, session_id: str, now: int) -> KioskSession:
@@ -181,7 +188,49 @@ def connect_to_kiosk(db: Session, device: Device, kiosk_id: Any, token: Any, now
     return transact(db, run)
 
 
-# ---------- phone: live cart shown on the kiosk ----------
+def start_store_session(db: Session, device: Device, store_id: str, now: int) -> dict[str, Any]:
+    """Give the phone its own cart without entering the kiosk's active-session slot."""
+    def run() -> dict[str, Any]:
+        store = db.get(Store, store_id, populate_existing=True)
+        if store is None:
+            raise AppError("store-not-found", "Store not found.")
+        if store.ordering_paused:
+            raise AppError("ordering-paused", "This store is not taking phone orders right now.")
+        staff_terminal = db.scalar(select(Kiosk.id).where(
+            Kiosk.store_id == store_id, Kiosk.api_key_hash.is_not(None),
+        ).limit(1))
+        if staff_terminal is None:
+            raise AppError("ordering-unavailable", "This store is not set up to receive phone orders.")
+        existing = db.scalar(select(KioskSession).where(
+            KioskSession.device_id == device.id,
+            KioskSession.store_id == store_id,
+            KioskSession.kiosk_id.is_(None),
+            KioskSession.status == "active",
+        ).with_for_update().execution_options(populate_existing=True))
+        if existing is not None:
+            if not _is_idle(existing, now):
+                existing.last_active_at = now
+                return session_dict(existing)
+            existing.status = "expired"
+            existing.ended_at = now
+            db.flush()
+        session = KioskSession(
+            id=str(uuid.uuid4()),
+            store_id=store_id,
+            device_id=device.id,
+            status="active",
+            created_at=now,
+            last_active_at=now,
+            help_requested=False,
+            cart={"lines": [], "total": 0, "summary": ""},
+        )
+        db.add(session)
+        return session_dict(session)
+
+    return transact(db, run)
+
+
+# ---------- phone: server-priced cart ----------
 
 
 def sync_cart(db: Session, device: Device, session_id: str, items: Any, now: int) -> dict[str, Any]:
@@ -231,6 +280,8 @@ def submit_order(
         lines, total = build_order_lines(_menu(db, session.store_id, lock=True), items)
         if db.get(Store, session.store_id).ordering_paused:
             raise AppError("ordering-paused", "This store is not taking phone orders right now.")
+        if session.kiosk_id is None and (not quote_id or not request_key):
+            raise AppError("price-changed", "Review a current quote before sending an order.")
         if quote_id is not None and (session.cart.get("quoteId") != quote_id
                                     or session.cart.get("lines") != lines or session.cart.get("total") != total):
             raise AppError("price-changed", "Refresh the cart and confirm its current price before ordering.")
@@ -261,9 +312,7 @@ def submit_order(
         session.order_id = order.id
         session.last_active_at = now
         session.ended_at = now
-        kiosk = db.get(Kiosk, session.kiosk_id, populate_existing=True)
-        if kiosk is not None and kiosk.active_session_id == session.id:
-            kiosk.active_session_id = None
+        _release_kiosk(db, session)
         db.flush()  # a duplicate order number fails here and is retried
         result = event(
             "ordered", session.kiosk_id, now, sessionId=session.id, storeId=session.store_id, orderId=order.id,
@@ -285,20 +334,45 @@ def request_help(db: Session, device: Device, session_id: str, now: int) -> dict
         session = _own_active_session(db, device, session_id, now)
         session.help_requested = True
         session.help_requested_at = now
+        session.help_resolved_at = None
         session.last_active_at = now
         return event("help", session.kiosk_id, now, sessionId=session.id, storeId=session.store_id)
 
     return transact(db, run)
 
 
+def request_order_help(db: Session, device: Device, order_id: str, now: int) -> dict[str, Any]:
+    def run() -> dict[str, Any]:
+        order = db.get(Order, order_id, populate_existing=True)
+        if order is None or order.device_id != device.id:
+            raise AppError("order-not-found", "Order not found.")
+        if order.status in {"picked_up", "cancelled"}:
+            raise AppError("bad-transition", "This order has already ended.")
+        session = db.get(KioskSession, order.session_id, populate_existing=True)
+        if session is None:
+            raise AppError("session-not-found", "Session not found.")
+        if not session.help_requested:
+            session.help_requested = True
+            session.help_requested_at = now
+            session.help_resolved_at = None
+        return event(
+            "help", session.kiosk_id, now, sessionId=session.id, storeId=order.store_id,
+            orderId=order.id, orderNumber=order.order_number,
+        )
+    return transact(db, run)
+
+
 def resolve_help(db: Session, kiosk: Kiosk, session_id: str, now: int) -> dict[str, Any]:
     def run() -> dict[str, Any]:
         session = db.get(KioskSession, session_id, populate_existing=True)
-        if session is None or session.kiosk_id != kiosk.id:
+        if session is None or session.store_id != kiosk.store_id or (
+            session.kiosk_id is not None and session.kiosk_id != kiosk.id and session.status != "ordered"
+        ):
             raise AppError("session-not-found", "Session not found for this kiosk.")
         session.help_requested = False
         session.help_resolved_at = now
-        return event("help_resolved", kiosk.id, now, sessionId=session.id, storeId=session.store_id)
+        return event("help_resolved", session.kiosk_id, now, sessionId=session.id, storeId=session.store_id,
+                     orderId=session.order_id)
 
     return transact(db, run)
 
@@ -317,9 +391,7 @@ def end_session(db: Session, caller: Device | Kiosk, session_id: str, now: int) 
         if session.status == "active":
             session.status = "ended"
             session.ended_at = now
-        kiosk = db.get(Kiosk, session.kiosk_id, populate_existing=True)
-        if kiosk is not None and kiosk.active_session_id == session.id:
-            kiosk.active_session_id = None
+        _release_kiosk(db, session)
         return event("ended", session.kiosk_id, now, sessionId=session.id, storeId=session.store_id, status=session.status)
 
     return transact(db, run)
@@ -330,7 +402,8 @@ def end_session(db: Session, caller: Device | Kiosk, session_id: str, now: int) 
 
 def update_order_status(db: Session, kiosk: Kiosk, order_id: str, status: str, now: int) -> dict[str, Any]:
     def run() -> dict[str, Any]:
-        order = db.get(Order, order_id, populate_existing=True)
+        order = db.scalar(select(Order).where(Order.id == order_id)
+                          .with_for_update().execution_options(populate_existing=True))
         if order is None or order.store_id != kiosk.store_id:
             raise AppError("order-not-found", "Order not found in this store.")
         check_transition(order.status, status)
@@ -349,7 +422,8 @@ def update_order_status(db: Session, kiosk: Kiosk, order_id: str, status: str, n
 
 def cancel_my_order(db: Session, device: Device, order_id: str, now: int) -> dict[str, Any]:
     def run() -> dict[str, Any]:
-        order = db.get(Order, order_id, populate_existing=True)
+        order = db.scalar(select(Order).where(Order.id == order_id)
+                          .with_for_update().execution_options(populate_existing=True))
         if order is None or order.device_id != device.id:
             raise AppError("order-not-found", "Order not found.")
         if order.status != "submitted":
@@ -371,6 +445,7 @@ def order_dict(order: Order) -> dict[str, Any]:
         "orderId": order.id,
         "orderNumber": order.order_number,
         "kioskId": order.kiosk_id,
+        "storeId": order.store_id,
         "sessionId": order.session_id,
         "status": order.status,
         "total": order.total,
@@ -380,6 +455,7 @@ def order_dict(order: Order) -> dict[str, Any]:
         "paymentMethod": order.payment_method,
         "createdAtMs": order.created_at,
         "updatedAtMs": order.updated_at,
+        "cancelledBy": order.cancelled_by,
     }
 
 
@@ -387,7 +463,19 @@ def get_my_order(db: Session, device: Device, order_id: str) -> dict[str, Any]:
     order = db.get(Order, order_id)
     if order is None or order.device_id != device.id:
         raise AppError("order-not-found", "Order not found.")
-    return order_dict(order)
+    session = db.get(KioskSession, order.session_id)
+    return {
+        **order_dict(order),
+        "helpState": ("sent" if session.help_requested else
+                      "acknowledged" if session.help_resolved_at is not None else "idle") if session else "idle",
+    }
+
+
+def get_my_orders(db: Session, device: Device) -> list[dict[str, Any]]:
+    query = select(Order).where(Order.device_id == device.id).order_by(
+        Order.created_at.desc(), Order.order_number.desc(), Order.id,
+    ).limit(50)
+    return [order_dict(order) for order in db.scalars(query)]
 
 
 def session_dict(session: KioskSession) -> dict[str, Any]:
@@ -424,9 +512,7 @@ def expire_sessions(db: Session, now: int) -> list[dict[str, Any]]:
         for session in sessions:
             session.status = "expired"
             session.ended_at = now
-            kiosk = db.get(Kiosk, session.kiosk_id, populate_existing=True)
-            if kiosk is not None and kiosk.active_session_id == session.id:
-                kiosk.active_session_id = None
+            _release_kiosk(db, session)
             events.append(event("ended", session.kiosk_id, now, sessionId=session.id,
                                 storeId=session.store_id, status="expired"))
         return events
@@ -450,6 +536,22 @@ def kiosk_orders(db: Session, kiosk: Kiosk, now: int, status: str | None = None)
     if status:
         query = query.where(Order.status == status)
     return [order_dict(o) for o in db.scalars(query.order_by(Order.created_at.desc()))]
+
+
+def kiosk_help_requests(db: Session, kiosk: Kiosk, now: int) -> list[dict[str, Any]]:
+    query = select(KioskSession, Order.order_number).outerjoin(Order, Order.id == KioskSession.order_id).where(
+        KioskSession.store_id == kiosk.store_id,
+        KioskSession.help_requested.is_(True),
+        (
+            (KioskSession.kiosk_id.is_(None) & (KioskSession.status == "active") &
+             (KioskSession.last_active_at > now - config.SESSION_IDLE_MS))
+            | ((KioskSession.status == "ordered") & Order.status.in_(("submitted", "accepted", "preparing", "ready")))
+        ),
+    ).order_by(KioskSession.help_requested_at, KioskSession.id)
+    return [
+        {"sessionId": session.id, "orderNumber": number}
+        for session, number in db.execute(query)
+    ]
 
 
 # ---------- staff: sold out ----------
@@ -499,9 +601,7 @@ def revoke_device(db: Session, device: Device, now: int):
             if session.status == "active":
                 session.status = "ended"
                 session.ended_at = now
-                kiosk = db.get(Kiosk, session.kiosk_id, populate_existing=True)
-                if kiosk and kiosk.active_session_id == session.id:
-                    kiosk.active_session_id = None
+                _release_kiosk(db, session)
                 events.append(event("ended", session.kiosk_id, now, sessionId=session.id,
                                             storeId=session.store_id, status="ended"))
         return events, ids

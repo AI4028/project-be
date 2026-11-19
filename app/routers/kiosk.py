@@ -27,7 +27,8 @@ def kiosk_state(kiosk: Kiosk = Depends(current_kiosk), db: Session = Depends(get
     """Restore the screen after reconnecting, including missed stock changes."""
     return {"session": service.kiosk_active_session(db, kiosk, now),
             "orders": service.kiosk_orders(db, kiosk, now),
-            "store": get_store(kiosk.store_id, db)}
+            "store": get_store(kiosk.store_id, db),
+            "helpRequests": service.kiosk_help_requests(db, kiosk, now)}
 
 
 @router.post("/heartbeat", response_model=TokenOut, response_model_exclude_unset=True)

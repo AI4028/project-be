@@ -33,8 +33,15 @@ class Hub:
                 self.leave(channel, ws)
 
     async def publish(self, event: dict[str, Any]) -> None:
-        """Send to the event's kiosk and, if any, its session's phone."""
-        await self.send(f"kiosk:{event['kioskId']}", event)
+        """Send paired events to the kiosk and direct orders to store staff."""
+        order_help = event.get("orderId") and event["type"] in {"help", "help_resolved"}
+        direct_staff_update = event["kioskId"] is None and event["type"] in {
+            "ordered", "order_status", "help", "help_resolved",
+        }
+        if order_help or direct_staff_update:
+            await self.send(f"staff-store:{event['storeId']}", event)
+        elif event["kioskId"] is not None:
+            await self.send(f"kiosk:{event['kioskId']}", event)
         if event.get("sessionId"):
             await self.send(f"session:{event['sessionId']}", event)
 
