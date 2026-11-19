@@ -2,15 +2,43 @@
 from __future__ import annotations
 import json
 import os
+from itertools import islice
 from typing import Literal
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 from app.accessibility import station_places, feature_places, nearby, in_korea
+from app.db import get_db
 from app.errors import AppError
+from app.models import Store
+from app.routers.public import nearby_stores, store_dict
 
 router = APIRouter(tags=["places"])
+
+
+def _search_text(value: str | None) -> str:
+    return "".join((value or "").casefold().split())
+
+
+def registered_places(db: Session, query: str, lat: float | None, lng: float | None):
+    if not query.strip():
+        return nearby_stores(lat, lng, radius_m=5000, db=db)[:15] if lat is not None and lng is not None else []
+
+    search = _search_text(query)
+    results = (
+        store_dict(store, with_menu=False)
+        for store in db.scalars(select(Store).order_by(Store.name, Store.id))
+        if any(search in _search_text(value) for value in (store.name, store.name_en, store.address))
+        or any(
+            search in _search_text(item.get(field))
+            for item in (store.menu or [])
+            for field in ("name", "nameEn")
+        )
+    )
+    return list(islice(results, 15))
 
 def kakao_search(query, lat=None, lng=None):
     key = os.environ.get("KAKAO_REST_API_KEY")
@@ -41,7 +69,8 @@ def kakao_search(query, lat=None, lng=None):
 @router.get("/places/search")
 def search_places(q: str = Query("", max_length=100),
     kind: Literal["all", "stations", "audio_signals", "voice_guides", "tactile", "crossings"] = "all",
-    lat: float | None = Query(None, ge=-90, le=90), lng: float | None = Query(None, ge=-180, le=180)):
+    lat: float | None = Query(None, ge=-90, le=90), lng: float | None = Query(None, ge=-180, le=180),
+    db: Session = Depends(get_db)):
     if (lat is None) != (lng is None):
         raise AppError("bad-request", "Provide both latitude and longitude.")
     if lat is not None and not in_korea(lat, lng):
@@ -56,14 +85,16 @@ def search_places(q: str = Query("", max_length=100),
         return {"places": places, "status": status, "generalSearch": "not-requested"}
     if kind == "stations" or (not q.strip() and lat is None):
         return {"places": stations, "status": "results" if stations else "empty", "generalSearch": "not-requested"}
+    provider_error = None
     try:
         venues = kakao_search(q.strip(), lat, lng)
         capability = "available" if venues is not None else "not-configured"
-    except AppError:
-        if not stations:
-            raise
+    except AppError as error:
         venues, capability = [], "unavailable"
-    places = [*(venues or []), *stations]
+        provider_error = error
+    places = [*registered_places(db, q, lat, lng), *(venues or []), *stations]
+    if provider_error and not places:
+        raise provider_error
     return {"places": places, "status": "results" if places else "empty" if capability == "available" else "unavailable", "generalSearch": capability}
 
 @router.get("/accessibility/nearby")

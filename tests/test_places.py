@@ -1,4 +1,4 @@
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from app import accessibility
 from app.routers import places
 import hashlib
@@ -73,6 +73,23 @@ def test_provider_error_does_not_expose_credentials(env, monkeypatch):
     assert response.status_code == 503
     assert "secret-test-key" not in response.text
 
+
+def test_registered_store_and_menu_search_survive_provider_denial(env, monkeypatch):
+    monkeypatch.setenv("KAKAO_REST_API_KEY", "test-key")
+
+    def denied(request, timeout):
+        raise HTTPError(request.full_url, 401, "Access denied", {}, None)
+
+    monkeypatch.setattr(places, "urlopen", denied)
+    for query in ("GIST", "아메리카노", "AMERICANO"):
+        response = env.client.get("/places/search", params={"q": query})
+        assert response.status_code == 200
+        result = response.json()
+        assert result["status"] == "results"
+        assert result["generalSearch"] == "unavailable"
+        assert [place["storeId"] for place in result["places"]] == ["gist-cafe"]
+        assert not result["places"][0].get("directoryOnly")
+
 def test_coordinate_validation_and_coverage(env):
     assert env.client.get("/places/search?lat=37").status_code == 400
     assert env.client.get("/accessibility/nearby?lat=999&lng=127").status_code == 400
@@ -101,3 +118,14 @@ def test_station_voice_guides_are_marked_as_approximate():
     record = accessibility.records("voice_guides")[0]
     result = accessibility.nearby("voice_guides", record[1], record[2], radius=100)
     assert result["items"][0]["coordinatePrecision"] == "station"
+
+
+def test_place_search_matches_registered_store_menus_even_when_provider_fails(env, monkeypatch):
+    monkeypatch.setenv("KAKAO_REST_API_KEY", "test-key")
+    def fail(*args, **kwargs):
+        raise URLError("offline")
+    monkeypatch.setattr(places, "urlopen", fail)
+    result = env.client.get("/places/search", params={"q": "아메리카노"}).json()
+    assert result["status"] == "results"
+    assert result["generalSearch"] == "unavailable"
+    assert any(place["storeId"] == "gist-cafe" for place in result["places"])

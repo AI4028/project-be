@@ -302,6 +302,42 @@ def test_store_info_for_accessibility_and_menus(env):
     assert env.client.get("/kiosks/GK01").json()["name"] == "키오스크 1"
 
 
+def test_store_pickup_location_and_photos(env):
+    from scripts.seed import load_store
+
+    store = {
+        "storeId": "photo-cafe",
+        "store": {
+            "name": "사진 카페",
+            "pickupLocation": "카운터 오른쪽 낮은 선반, 높이 약 75cm",
+            "imageUrl": "https://example.com/store.jpg",
+            "phone": "062-715-0000",
+            "hours": "09:00–21:00",
+            "hoursEn": "9 AM – 9 PM",
+        },
+        "menu": [{"id": "tea", "name": "녹차", "price": 3000, "imageUrl": "https://example.com/tea.jpg"}],
+    }
+    with env.db() as db:
+        load_store(db, store)
+    info = env.client.get("/stores/photo-cafe").json()
+    assert info["pickupLocation"] == "카운터 오른쪽 낮은 선반, 높이 약 75cm"
+    assert info["imageUrl"] == "https://example.com/store.jpg"
+    assert info["menu"][0]["imageUrl"] == "https://example.com/tea.jpg"
+    assert (info["phone"], info["hours"], info["hoursEn"]) == ("062-715-0000", "09:00–21:00", "9 AM – 9 PM")
+    listed = {s["storeId"]: s for s in env.client.get("/stores").json()}
+    assert listed["photo-cafe"]["imageUrl"] == "https://example.com/store.jpg"
+    assert listed["gist-cafe"]["imageUrl"] is None
+
+    # Photos are served from media/; seed files must point at real files there.
+    assert env.client.get("/media/README.md").status_code == 200
+    with env.db() as db:
+        for bad in ("http://example.com/a.jpg", "media/a.jpg", "/media/missing.jpg"):
+            with pytest.raises(ValueError, match="imageUrl|not found"):
+                load_store(db, {**store, "store": {**store["store"], "imageUrl": bad}})
+        with pytest.raises(ValueError, match="phone"):
+            load_store(db, {**store, "store": {**store["store"], "phone": "call us"}})
+
+
 def test_nearby_stores_for_the_map(env):
     # At the cafe: inside its 50 m geofence. other-cafe has no location, so it never shows.
     at_cafe = env.client.get("/stores/nearby", params={"lat": 35.2286, "lng": 126.8436}).json()
@@ -377,3 +413,23 @@ def test_websocket_waiting_for_the_database_does_not_freeze_the_server(env):
 
     holder.join()
     socket.join()
+
+
+def test_session_help_state_and_ordered_payload_fields(env):
+    phone, session_id = connected(env)
+    assert env.client.get(f"/sessions/{session_id}", headers=phone).json()["helpState"] == "idle"
+    assert env.client.post(f"/sessions/{session_id}/help", headers=phone).status_code == 200
+    assert env.client.get(f"/sessions/{session_id}", headers=phone).json()["helpState"] == "sent"
+    assert env.client.post(f"/kiosk/sessions/{session_id}/resolve-help", headers=env.kiosk).status_code == 200
+    assert env.client.get(f"/sessions/{session_id}", headers=phone).json()["helpState"] == "acknowledged"
+
+    items = [{"itemId": "americano", "qty": 1, "options": {"temp": "ice", "size": "regular"}}]
+    cart = env.client.put(f"/sessions/{session_id}/cart", json={"items": items}, headers=phone).json()
+    order = env.client.post(
+        f"/sessions/{session_id}/order",
+        json={"items": items, "paymentMethod": "counter", "note": "", "quoteId": cart["quoteId"]},
+        headers=phone,
+    ).json()
+    assert order["lines"] == cart["lines"]
+    assert isinstance(order["createdAtMs"], int)
+    assert isinstance(order["updatedAtMs"], int)

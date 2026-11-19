@@ -22,7 +22,12 @@
       "screenMagnifier": null,
       "highContrast": null
     },
-    "indoorDirections": "TODO: e.g. 입구로 들어오면 키오스크는 오른쪽, 카운터는 정면에 있습니다."
+    "indoorDirections": "TODO: e.g. 입구로 들어오면 키오스크는 오른쪽, 카운터는 정면에 있습니다.",
+    "pickupLocation": "TODO: e.g. 카운터 오른쪽 낮은 선반, 높이 약 75cm",
+    "imageUrl": null,
+    "phone": null,
+    "hours": null,
+    "hoursEn": null
   },
   "kiosks": [
     { "kioskId": "GK01", "name": "키오스크 1", "nameEn": "Kiosk 1" }

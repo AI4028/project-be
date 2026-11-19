@@ -26,6 +26,11 @@ class StoreOut(CamelModel):
     accessibility: dict[str, Any]
     kiosk_features: dict[str, Any]
     indoor_directions: str | None
+    pickup_location: str | None = None
+    image_url: str | None = None
+    phone: str | None = None
+    hours: str | None = None
+    hours_en: str | None = None
     ordering_paused: bool = False
     menu: list[dict[str, Any]] | None = None
     distance_m: int | None = None
@@ -77,6 +82,7 @@ class SessionOut(CamelModel):
     store_id: str
     status: Literal['active', 'ordered', 'ended', 'expired']
     help_requested: bool
+    help_state: Literal['idle', 'sent', 'acknowledged'] = 'idle'
     cart: CartOut
     order_id: str | None
     last_active_at_ms: int
@@ -126,9 +132,12 @@ class Ordered(Event):
     order_number: int
     total: int
     summary: str
+    lines: list[LineOut] = []
     status: Literal['submitted']
     payment_method: Literal['counter', 'kiosk']
     note: str
+    created_at_ms: int | None = None
+    updated_at_ms: int | None = None
 
 
 class HelpEvent(Event):

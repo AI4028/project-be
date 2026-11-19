@@ -13,7 +13,7 @@ def test_fresh_database_migrates_to_current_models(tmp_path):
         migrate(engine)
         with engine.connect() as connection:
             assert compare_metadata(MigrationContext.configure(connection), Base.metadata) == []
-            assert MigrationContext.configure(connection).get_current_revision() == '0004'
+            assert MigrationContext.configure(connection).get_current_revision() == '0005'
     finally:
         engine.dispose()
 

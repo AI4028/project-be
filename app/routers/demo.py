@@ -50,7 +50,12 @@ def get_kiosk_token(kiosk_id: str, db: Session = Depends(get_db), now: int = Dep
     if not kiosk.current_token or not kiosk.current_expires_at or kiosk.current_expires_at <= now:
         # No kiosk app running: rotate on its behalf.
         service.kiosk_heartbeat(db, kiosk, now, mark_seen=False)
-    return {"kioskId": kiosk.id, "token": kiosk.current_token, "expiresAtMs": kiosk.current_expires_at}
+    return {
+        "kioskId": kiosk.id,
+        "token": kiosk.current_token,
+        "expiresAtMs": kiosk.current_expires_at,
+        "refreshInMs": max(1000, min(config.TOKEN_REFRESH_MS, kiosk.current_expires_at - now - 5000)),
+    }
 
 
 @router.post("/proximity", dependencies=[Depends(require_demo_mode)], response_model=ProximityOut, response_model_exclude_unset=True)
