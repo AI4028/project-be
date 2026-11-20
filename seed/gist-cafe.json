@@ -4,6 +4,7 @@
   "store": {
     "name": "GIST 카페 (데모)",
     "nameEn": "GIST Cafe (demo)",
+    "addressEn": "123 Cheomdangwagi-ro, Buk-gu, Gwangju (GIST)",
     "address": "광주광역시 북구 첨단과기로 123 (GIST)",
     "location": { "lat": 35.2286, "lng": 126.8436 },
     "geofenceRadiusM": 50,
@@ -42,6 +43,7 @@
       "sortOrder": 1,
       "price": 2500,
       "available": true,
+      "descriptionEn": "Espresso topped with water.",
       "description": "에스프레소에 물을 더한 기본 커피",
       "options": [
         {
@@ -76,6 +78,7 @@
       "sortOrder": 2,
       "price": 3500,
       "available": true,
+      "descriptionEn": "Espresso with milk.",
       "description": "에스프레소와 우유",
       "options": [
         {
@@ -103,6 +106,7 @@
       "sortOrder": 3,
       "price": 4000,
       "available": true,
+      "descriptionEn": "A latte with vanilla syrup.",
       "description": "바닐라 시럽이 들어간 라떼",
       "options": [
         {
@@ -130,6 +134,7 @@
       "sortOrder": 4,
       "price": 4500,
       "available": true,
+      "descriptionEn": "Sparkling grapefruit, served iced.",
       "description": "탄산이 들어간 자몽 음료, 아이스만 가능",
       "options": []
     },
@@ -141,6 +146,7 @@
       "sortOrder": 5,
       "price": 3000,
       "available": true,
+      "descriptionEn": "A butter croissant.",
       "description": "버터 크루아상",
       "options": [
         {
@@ -159,6 +165,7 @@
       "sortOrder": 6,
       "price": 5000,
       "available": false,
+      "descriptionEn": "Sold out today (demo).",
       "description": "오늘은 품절 (품절 처리 테스트용)",
       "options": []
     }

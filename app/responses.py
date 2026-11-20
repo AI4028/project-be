@@ -19,6 +19,7 @@ class StoreOut(CamelModel):
     store_id: str
     name: str
     name_en: str | None
+    address_en: str | None = None
     address: str | None
     location: Location | None
     geofence_radius_m: int | None

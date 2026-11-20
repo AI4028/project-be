@@ -57,10 +57,10 @@ def test_station_search_works_without_provider_credentials(env, monkeypatch):
     assert all(place["directoryOnly"] and not place["accessibility"] for place in result.json()["places"])
     assert result.json()["generalSearch"] == "not-requested"
 
-def test_missing_credentials_are_not_reported_as_no_results(env, monkeypatch):
+def test_empty_catalog_matches_are_distinct_from_external_search_availability(env, monkeypatch):
     monkeypatch.delenv("KAKAO_REST_API_KEY", raising=False)
     result = env.client.get("/places/search", params={"q": "unlikely-venue-xyz-123"}).json()
-    assert result["status"] == "unavailable"
+    assert result["status"] == "empty"
     assert result["generalSearch"] == "not-configured"
     assert result["places"] == []
 
@@ -72,6 +72,15 @@ def test_provider_error_does_not_expose_credentials(env, monkeypatch):
     response = env.client.get("/places/search", params={"q": "unlikely-venue-xyz-123"})
     assert response.status_code == 503
     assert "secret-test-key" not in response.text
+
+
+def test_named_menu_search_from_abroad_preserves_nearby_coverage_rules(env, monkeypatch):
+    monkeypatch.delenv("KAKAO_REST_API_KEY", raising=False)
+    position = {"lat": 51.5, "lng": -0.12}
+    named = env.client.get("/places/search", params={**position, "q": "아메리카노"}).json()
+    assert named["status"] == "results"
+    assert any(place["storeId"] == "gist-cafe" for place in named["places"])
+    assert env.client.get("/places/search", params=position).json()["status"] == "outside-coverage"
 
 
 def test_registered_store_and_menu_search_survive_provider_denial(env, monkeypatch):

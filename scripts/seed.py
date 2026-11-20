@@ -67,6 +67,7 @@ def load_store(db: Session, data: dict[str, Any]) -> tuple[str, int, int]:
     store.name = info["name"]
     store.name_en = info.get("nameEn")
     store.address = info.get("address")
+    store.address_en = info.get("addressEn")
     store.lat = location.get("lat")
     store.lng = location.get("lng")
     store.geofence_radius_m = info.get("geofenceRadiusM")

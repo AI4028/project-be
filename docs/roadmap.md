@@ -12,10 +12,8 @@ integration is on `feature/ordering-readiness` in the adjacent
 
 | Priority | Task | Why / done when |
 | --- | --- | --- |
-| 1 | Fix the beacon → bridge format. | The sketch sends `STORE/KIOSK/TX/SEQ`; the bridge requires `DIST`, so it drops every current packet. Agree on the format and verify readings reach `/ws/proximity`. [Hardware](hardware.md#known-gaps) |
-| 2 | Finish real Bluetooth pairing. | The beacon does not send the rotating API token. Connect heartbeat → broadcast → phone scan → `POST /sessions`, and test on target phones with demo mode off. |
-| 3 | Replace the demo cafe data. | Prices, location and accessibility values are placeholders. Visit the store and update [gist-cafe.json](../seed/gist-cafe.json), including indoor directions. |
-| 4 | Verify the full phone and staff flow. | Connect the map/geofence, cart, help, order status and reconnect screens. Test screen readers, large text and contrast on real devices; measure time to order at the pilot cafe. |
+| 1 | Replace the demo cafe data. | Prices, location and accessibility values are placeholders. Visit the store and update [gist-cafe.json](../seed/gist-cafe.json), including indoor directions. |
+| 2 | Verify the full phone and staff flow. | Use a code-free cart or kiosk code, request help, submit a pay-at-café order, and check staff acknowledgement and order status. Test screen readers, large text and contrast on real devices. |
 
 ## Backend work completed
 
@@ -31,7 +29,8 @@ integration is on `feature/ordering-readiness` in the adjacent
 ## Later, if needed
 
 - Store/menu editing: currently done through the seed script, apart from item availability. Add staff editing and a way to keep accessibility details current.
-- Payments: `paymentMethod` only records a choice. Agree on the payment flow before adding payment processing.
+- Live checkout records payment at the café. Card and wallet simulation is available on demo backends. Online payment processing would require a separate integration.
+- Live beacon guidance is prototype work. Reconcile the beacon packet and bridge formats, implement rotating-token broadcast, and test on site before offering live navigation. [Hardware gaps](hardware.md#known-gaps)
 - Scaling: add a shared event broker before running multiple workers; add pagination and database-side nearby search as store/order counts grow.
 - Voice ordering and indoor guidance: still product work to explore and test in a noisy cafe.
 
@@ -46,5 +45,5 @@ Frontend adoption, typechecking, unit tests and web export pass.
 Hardware integration, verified cafe details, and real-device accessibility/permission
 checks remain. Automated checks do not establish these. Postgres could not be run
 locally because Docker Desktop's engine is stopped; CI still runs the API suite on it.
-Online payments, push notifications and help after ordering remain optional product
-extensions, not implemented services.
+Push notifications remain future work. Staff can acknowledge help from an active
+session or an open order through the kiosk. [API contract](api.md#staff-help-delivery)
