@@ -19,6 +19,7 @@ class Store(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(200))
     name_en: Mapped[str | None] = mapped_column(String(200))
+    address_en: Mapped[str | None] = mapped_column(String(300))
     address: Mapped[str | None] = mapped_column(String(300))
     lat: Mapped[float | None] = mapped_column(Float)
     lng: Mapped[float | None] = mapped_column(Float)

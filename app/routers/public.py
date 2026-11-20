@@ -23,6 +23,7 @@ def store_dict(store: Store, with_menu: bool) -> dict[str, Any]:
         "name": store.name,
         "nameEn": store.name_en,
         "address": store.address,
+        "addressEn": store.address_en,
         "location": {"lat": store.lat, "lng": store.lng} if store.lat is not None else None,
         "geofenceRadiusM": store.geofence_radius_m,
         "orderingMethods": store.ordering_methods or [],

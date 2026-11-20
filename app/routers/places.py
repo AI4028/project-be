@@ -31,7 +31,7 @@ def registered_places(db: Session, query: str, lat: float | None, lng: float | N
     results = (
         store_dict(store, with_menu=False)
         for store in db.scalars(select(Store).order_by(Store.name, Store.id))
-        if any(search in _search_text(value) for value in (store.name, store.name_en, store.address))
+        if any(search in _search_text(value) for value in (store.name, store.name_en, store.address, store.address_en))
         or any(
             search in _search_text(item.get(field))
             for item in (store.menu or [])

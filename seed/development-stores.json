@@ -5,8 +5,8 @@
       "name": "온기 로스터리",
       "nameEn": "Ongi Roastery",
       "address": "성수 본점 · 데모",
-      "hours": "09:00–21:00",
-      "hoursEn": "09:00–21:00",
+      "hours": "매일 09:00–21:00",
+      "hoursEn": "Daily 09:00–21:00",
       "location": {
         "lat": 37.544,
         "lng": 127.052
@@ -15,7 +15,15 @@
       "orderingMethods": [
         "phone",
         "staff"
-      ]
+      ],
+      "addressEn": "Seongsu flagship · Demo",
+      "accessibility": {
+        "demo": true,
+        "floor": 1,
+        "stepFreeEntrance": true,
+        "automaticDoor": true,
+        "staffAssistance": true
+      }
     },
     "menu": [
       {
@@ -23,22 +31,171 @@
         "imageUrl": "/media/menu/americano.jpg",
         "name": "아메리카노",
         "nameEn": "Americano",
-        "description": "",
-        "category": "음료",
+        "description": "에스프레소에 물을 더한 커피",
+        "category": "커피",
         "price": 4500,
         "available": true,
-        "options": []
+        "options": [
+          {
+            "id": "temp",
+            "name": "온도",
+            "type": "single",
+            "required": true,
+            "choices": [
+              {
+                "id": "hot",
+                "name": "따뜻하게",
+                "priceDelta": 0
+              },
+              {
+                "id": "ice",
+                "name": "아이스",
+                "priceDelta": 0
+              }
+            ]
+          }
+        ],
+        "descriptionEn": "Espresso topped with water."
       },
       {
         "id": "cafe-latte",
         "imageUrl": "/media/menu/cafe-latte.jpg",
         "name": "카페 라떼",
         "nameEn": "Cafe Latte",
-        "description": "",
-        "category": "음료",
+        "description": "에스프레소에 부드러운 우유를 더했어요.",
+        "category": "커피",
         "price": 5200,
         "available": true,
-        "options": []
+        "options": [
+          {
+            "id": "temp",
+            "name": "온도",
+            "type": "single",
+            "required": true,
+            "choices": [
+              {
+                "id": "hot",
+                "name": "따뜻하게",
+                "priceDelta": 0
+              },
+              {
+                "id": "ice",
+                "name": "아이스",
+                "priceDelta": 0
+              }
+            ]
+          },
+          {
+            "id": "extras",
+            "name": "추가",
+            "type": "multi",
+            "required": false,
+            "maxChoices": 2,
+            "choices": [
+              {
+                "id": "oat",
+                "name": "오트 우유",
+                "priceDelta": 600
+              },
+              {
+                "id": "decaf",
+                "name": "디카페인",
+                "priceDelta": 700
+              }
+            ]
+          }
+        ],
+        "descriptionEn": "Espresso with steamed milk."
+      },
+      {
+        "id": "vanilla-latte",
+        "imageUrl": "/media/menu/vanilla-latte.jpg",
+        "name": "바닐라 라떼",
+        "nameEn": "Vanilla Latte",
+        "description": "바닐라 향이 나는 라떼",
+        "category": "커피",
+        "price": 5800,
+        "available": true,
+        "options": [],
+        "descriptionEn": "Espresso with milk and vanilla."
+      },
+      {
+        "id": "black-tea",
+        "name": "홍차",
+        "nameEn": "Black Tea",
+        "description": "향긋하게 우린 홍차",
+        "descriptionEn": "Freshly brewed black tea.",
+        "price": 4800,
+        "available": true,
+        "options": [
+          {
+            "id": "temp",
+            "name": "온도",
+            "type": "single",
+            "required": true,
+            "choices": [
+              {
+                "id": "hot",
+                "name": "따뜻하게",
+                "priceDelta": 0
+              },
+              {
+                "id": "ice",
+                "name": "아이스",
+                "priceDelta": 0
+              }
+            ]
+          }
+        ],
+        "category": "차·논커피"
+      },
+      {
+        "id": "grapefruit-ade",
+        "imageUrl": "/media/menu/grapefruit-ade.jpg",
+        "name": "자몽 에이드",
+        "nameEn": "Grapefruit Ade",
+        "description": "탄산을 더한 자몽 음료",
+        "category": "차·논커피",
+        "price": 5600,
+        "available": true,
+        "options": [],
+        "descriptionEn": "Sparkling grapefruit served over ice."
+      },
+      {
+        "id": "salt-bread",
+        "name": "소금빵",
+        "nameEn": "Salt Bread",
+        "description": "버터와 소금으로 구운 빵",
+        "category": "빵",
+        "price": 3800,
+        "available": true,
+        "options": [
+          {
+            "id": "warm",
+            "name": "데우기",
+            "type": "single",
+            "required": false,
+            "choices": [
+              {
+                "id": "yes",
+                "name": "데워 주세요",
+                "priceDelta": 0
+              }
+            ]
+          }
+        ],
+        "descriptionEn": "Buttery bread with a sprinkle of salt."
+      },
+      {
+        "id": "croissant",
+        "name": "크루아상",
+        "nameEn": "Croissant",
+        "description": "겹겹이 구운 버터 크루아상",
+        "category": "빵",
+        "price": 4200,
+        "available": true,
+        "options": [],
+        "descriptionEn": "A flaky butter croissant."
       }
     ],
     "kiosks": [
@@ -55,8 +212,8 @@
       "name": "머무름 베이커리",
       "nameEn": "Meomureum Bakery",
       "address": "연남점 · 데모",
-      "hours": "10:00–20:00",
-      "hoursEn": "10:00–20:00",
+      "hours": "매일 10:00–20:00",
+      "hoursEn": "Daily 10:00–20:00",
       "location": {
         "lat": 37.562,
         "lng": 126.924
@@ -65,28 +222,52 @@
       "orderingMethods": [
         "phone",
         "staff"
-      ]
+      ],
+      "addressEn": "Yeonnam branch · Demo",
+      "accessibility": {
+        "demo": true,
+        "floor": 1,
+        "stepFreeEntrance": false,
+        "automaticDoor": false,
+        "staffAssistance": true
+      }
     },
     "menu": [
       {
         "id": "salt-bread",
         "name": "소금빵",
         "nameEn": "Salt Bread",
-        "description": "",
+        "description": "버터와 소금으로 구운 빵",
         "category": "베이커리",
         "price": 3800,
         "available": true,
-        "options": []
+        "options": [
+          {
+            "id": "warm",
+            "name": "데우기",
+            "type": "single",
+            "required": false,
+            "choices": [
+              {
+                "id": "yes",
+                "name": "데워 주세요",
+                "priceDelta": 0
+              }
+            ]
+          }
+        ],
+        "descriptionEn": "Buttery bread with a sprinkle of salt."
       },
       {
         "id": "croissant",
         "name": "크루아상",
         "nameEn": "Croissant",
-        "description": "",
+        "description": "겹겹이 구운 버터 크루아상",
         "category": "베이커리",
         "price": 4200,
         "available": true,
-        "options": []
+        "options": [],
+        "descriptionEn": "A flaky butter croissant."
       }
     ],
     "kiosks": [
@@ -103,8 +284,8 @@
       "name": "창가 서재 카페",
       "nameEn": "Changga Book Cafe",
       "address": "혜화 대학로점 · 데모",
-      "hours": "10:00–22:00",
-      "hoursEn": "10:00–22:00",
+      "hours": "매일 10:00–22:00",
+      "hoursEn": "Daily 10:00–22:00",
       "location": {
         "lat": 37.582,
         "lng": 127.002
@@ -113,7 +294,14 @@
       "orderingMethods": [
         "phone",
         "staff"
-      ]
+      ],
+      "addressEn": "Daehak-ro, Hyehwa · Demo",
+      "accessibility": {
+        "demo": true,
+        "floor": 2,
+        "elevator": true,
+        "staffAssistance": null
+      }
     },
     "menu": [
       {
@@ -121,22 +309,24 @@
         "imageUrl": "/media/menu/vanilla-latte.jpg",
         "name": "바닐라 라떼",
         "nameEn": "Vanilla Latte",
-        "description": "",
+        "description": "바닐라 향이 나는 라떼",
         "category": "음료",
         "price": 5800,
         "available": true,
-        "options": []
+        "options": [],
+        "descriptionEn": "Espresso with milk and vanilla."
       },
       {
         "id": "grapefruit-ade",
         "imageUrl": "/media/menu/grapefruit-ade.jpg",
         "name": "자몽 에이드",
         "nameEn": "Grapefruit Ade",
-        "description": "",
+        "description": "탄산을 더한 자몽 음료",
         "category": "음료",
         "price": 5600,
         "available": true,
-        "options": []
+        "options": [],
+        "descriptionEn": "Sparkling grapefruit served over ice."
       }
     ],
     "kiosks": [
