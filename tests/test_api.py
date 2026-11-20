@@ -488,3 +488,38 @@ def test_live_checkout_accepts_payment_at_cafe_and_rejects_simulation(env):
     response = env.client.post(path, headers=phone, json={"items": AMERICANO, "paymentMethod": "counter"})
     assert response.status_code == 201
     assert response.json()["simulatedApprovedAmount"] is None
+
+
+def test_counter_order_keeps_quoted_option_prices_through_kiosk_and_history(env):
+    phone = new_phone(env)
+    assert env.client.get("/orders", headers=phone).json() == []
+    session = env.client.post("/stores/gist-cafe/sessions", headers=phone).json()
+    url = f"/sessions/{session['sessionId']}"
+    items = [{"itemId": "cafe-latte", "qty": 2, "options": {"temp": "ice", "milk": "oat"}}]
+    quote = env.client.put(f"{url}/cart", json={"items": items}, headers=phone).json()
+    [line] = quote["lines"]
+    assert [(choice["choiceId"], choice["priceDelta"]) for choice in line["options"]] == [
+        ("ice", 0), ("oat", 500),
+    ]
+    assert quote["total"] == 8000
+    assert env.client.get("/orders", headers=phone).json() == []
+
+    placed = env.client.post(
+        f"{url}/order",
+        headers={**phone, "Idempotency-Key": f"order:{session['sessionId']}"},
+        json={"items": items, "quoteId": quote["quoteId"], "paymentMethod": "counter"},
+    )
+    assert placed.status_code == 201, placed.text
+    order_id = placed.json()["orderId"]
+    [queued] = env.client.get("/kiosk/orders", headers=env.kiosk).json()
+    assert queued["orderId"] == order_id
+    assert queued["paymentMethod"] == "counter"
+    assert queued["lines"] == quote["lines"]
+    for status in ("accepted", "preparing", "ready", "picked_up"):
+        changed = env.client.post(f"/kiosk/orders/{order_id}/status", headers=env.kiosk, json={"status": status})
+        assert changed.status_code == 200, changed.text
+        [entry] = env.client.get("/orders", headers=phone).json()
+        details = env.client.get(f"/orders/{entry['orderId']}", headers=phone).json()
+        assert entry["orderId"] == order_id
+        assert entry["status"] == details["status"] == status
+        assert details["lines"] == quote["lines"]
