@@ -44,6 +44,21 @@ def error(res, status: int, code: str) -> None:
 # ---------- tests ----------
 
 
+def test_preorder_help_from_a_code_free_session_reaches_its_venue(env):
+    phone = new_phone(env)
+    session = env.client.post("/stores/gist-cafe/sessions", headers=phone).json()
+    session_id = session["sessionId"]
+    path = f"/sessions/{session_id}"
+    assert env.client.post(f"{path}/help", headers=phone).status_code == 200
+    assert env.client.get(f"{path}", headers=phone).json()["helpState"] == "sent"
+    assert env.client.get("/kiosk/state", headers=env.kiosk).json()["helpRequests"] == [
+        {"sessionId": session_id, "orderNumber": None}
+    ]
+    assert env.client.get("/kiosk/state", headers=env.other_kiosk).json()["helpRequests"] == []
+    assert env.client.post(f"/kiosk/sessions/{session_id}/resolve-help", headers=env.kiosk).status_code == 200
+    assert env.client.get(f"{path}", headers=phone).json()["helpState"] == "acknowledged"
+
+
 def test_store_order_does_not_reserve_kiosk_and_reaches_only_store_staff(env):
     paired_phone, paired_id = connected(env)
     customer = new_phone(env)

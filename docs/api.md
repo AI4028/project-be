@@ -77,6 +77,16 @@ Item and option IDs come from the store's menu.
 - Order numbers start at 1 per store and reset at midnight KST. Submission sets the session to `ordered`; start a new session for the next order.
 - Code-free sessions require a configured staff kiosk and use a current `quoteId` and stable `Idempotency-Key` to submit. The staff console receives direct orders and help requests for its store.
 
+### Staff help delivery
+
+Browsing a venue requires no session. To send an in-app request before ordering,
+the phone uses its active session at that venue. A paired request appears in the
+paired kiosk’s active session. A code-free cart request appears in the venue’s
+`helpRequests` list in `GET /kiosk/state`. After submission, the phone uses the
+open order’s help endpoint and the request appears in the venue queue with its
+order number. A successful POST means the server recorded the request. The
+customer sees `acknowledged` after staff use the resolve-help endpoint.
+
 ## Kiosk endpoints
 
 Functions: [kiosk.py](../app/routers/kiosk.py). Kiosk auth required.
