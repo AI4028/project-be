@@ -74,7 +74,10 @@ def search_places(q: str = Query("", max_length=100),
     if (lat is None) != (lng is None):
         raise AppError("bad-request", "Provide both latitude and longitude.")
     if lat is not None and not in_korea(lat, lng):
-        return {"places": [], "status": "outside-coverage", "generalSearch": "unavailable"}
+        if not q.strip() or kind not in ("all", "stations"):
+            return {"places": [], "status": "outside-coverage", "generalSearch": "unavailable"}
+        # A named destination can be searched before arriving in Korea.
+        lat = lng = None
     stations = station_places(q, lat, lng)
     if kind not in ("all", "stations"):
         if lat is None and stations:
@@ -95,7 +98,7 @@ def search_places(q: str = Query("", max_length=100),
     places = [*registered_places(db, q, lat, lng), *(venues or []), *stations]
     if provider_error and not places:
         raise provider_error
-    return {"places": places, "status": "results" if places else "empty" if capability == "available" else "unavailable", "generalSearch": capability}
+    return {"places": places, "status": "results" if places else "empty" if q.strip() or capability == "available" else "unavailable", "generalSearch": capability}
 
 @router.get("/accessibility/nearby")
 def nearby_accessibility(lat: float = Query(ge=-90, le=90), lng: float = Query(ge=-180, le=180), radiusM: int = Query(300, ge=25, le=1000)):
