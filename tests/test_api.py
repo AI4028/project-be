@@ -523,3 +523,30 @@ def test_counter_order_keeps_quoted_option_prices_through_kiosk_and_history(env)
         assert entry["orderId"] == order_id
         assert entry["status"] == details["status"] == status
         assert details["lines"] == quote["lines"]
+
+
+def test_preorder_help_is_queued_for_its_venue_until_acknowledged(env):
+    phone = new_phone(env)
+    session = env.client.post("/stores/gist-cafe/sessions", headers=phone).json()
+    session_id = session["sessionId"]
+    path = f"/sessions/{session_id}"
+    acknowledge = f"/kiosk/sessions/{session_id}/resolve-help"
+    error(env.client.post(acknowledge, headers=env.kiosk), 409, "no-help-request")
+    assert env.client.get(path, headers=phone).json()["helpState"] == "idle"
+
+    for _ in range(2):
+        assert env.client.post(f"{path}/help", headers=phone).status_code == 200
+    assert env.client.get(path, headers=phone).json()["helpState"] == "sent"
+    assert env.client.get("/kiosk/state", headers=env.kiosk).json()["helpRequests"] == [
+        {"sessionId": session_id, "orderNumber": None}
+    ]
+    assert env.client.get("/kiosk/state", headers=env.other_kiosk).json()["helpRequests"] == []
+    error(env.client.post(acknowledge, headers=env.other_kiosk), 404, "session-not-found")
+
+    received = env.client.post(acknowledge, headers=env.kiosk).json()
+    env.clock.advance(1000)
+    assert env.client.post(acknowledge, headers=env.kiosk).json() == received
+    assert env.client.get("/kiosk/state", headers=env.kiosk).json()["helpRequests"] == []
+    assert env.client.get(path, headers=phone).json()["helpState"] == "acknowledged"
+    assert env.client.post(f"{path}/help", headers=phone).status_code == 200
+    assert env.client.get(path, headers=phone).json()["helpState"] == "sent"

@@ -350,9 +350,10 @@ def submit_order(
 def request_help(db: Session, device: Device, session_id: str, now: int) -> dict[str, Any]:
     def run() -> dict[str, Any]:
         session = _own_active_session(db, device, session_id, now)
-        session.help_requested = True
-        session.help_requested_at = now
-        session.help_resolved_at = None
+        if not session.help_requested:
+            session.help_requested = True
+            session.help_requested_at = now
+            session.help_resolved_at = None
         session.last_active_at = now
         return event("help", session.kiosk_id, now, sessionId=session.id, storeId=session.store_id)
 
@@ -387,9 +388,12 @@ def resolve_help(db: Session, kiosk: Kiosk, session_id: str, now: int) -> dict[s
             session.kiosk_id is not None and session.kiosk_id != kiosk.id and session.status != "ordered"
         ):
             raise AppError("session-not-found", "Session not found for this kiosk.")
-        session.help_requested = False
-        session.help_resolved_at = now
-        return event("help_resolved", session.kiosk_id, now, sessionId=session.id, storeId=session.store_id,
+        if not session.help_requested and session.help_resolved_at is None:
+            raise AppError("no-help-request", "There is no staff help request to acknowledge.")
+        if session.help_requested:
+            session.help_requested = False
+            session.help_resolved_at = now
+        return event("help_resolved", session.kiosk_id, session.help_resolved_at, sessionId=session.id, storeId=session.store_id,
                      orderId=session.order_id)
 
     return transact(db, run)

@@ -43,6 +43,7 @@ _STATUS = {
     "choice-unavailable": 409,
     "too-late-to-cancel": 409,
     "bad-transition": 409,
+    "no-help-request": 409,
     "price-changed": 409,
     "idempotency-conflict": 409,
 }
