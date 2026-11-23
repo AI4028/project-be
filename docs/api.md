@@ -109,9 +109,10 @@ Staff can cancel from `submitted` or `accepted`; the phone can cancel only from
 
 ## Bluetooth advertisement
 
-Intended payload: `LK` + four-character kiosk ID + eight-character token,
+Payload: `LK` + four-character kiosk ID + eight-character token,
 e.g. `LKGK017H3KQ9ZC`. Split into `kioskId` and `token` for pairing.
-The Arduino prototype does not send this yet: [hardware gaps](hardware.md#known-gaps).
+The ESP32 firmware advertises this payload as the BLE complete local name.
+See the [pairing bridge and firmware](hardware.md#ble-pairing-bridge).
 
 Tokens rotate about every 30 seconds and expire after 60 seconds. The previous
 token works until its original expiry. One phone per kiosk; the same phone can
