@@ -14,6 +14,7 @@ from app.accessibility import station_places, feature_places, nearby, in_korea
 from app.db import get_db
 from app.errors import AppError
 from app.models import Store
+from app.walking_routes import add_walking_routes
 from app.routers.public import nearby_stores, store_dict
 
 router = APIRouter(tags=["places"])
@@ -95,7 +96,11 @@ def search_places(q: str = Query("", max_length=100),
     except AppError as error:
         venues, capability = [], "unavailable"
         provider_error = error
-    places = [*registered_places(db, q, lat, lng), *(venues or []), *stations]
+    cafes = [*registered_places(db, q, lat, lng), *(venues or [])]
+    if not q.strip() and lat is not None:
+        add_walking_routes(cafes, lat, lng)
+        cafes.sort(key=lambda cafe: cafe["walkingRoute"]["distanceM"] if cafe["walkingRoute"] else float("inf"))
+    places = [*cafes, *stations]
     if provider_error and not places:
         raise provider_error
     return {"places": places, "status": "results" if places else "empty" if q.strip() or capability == "available" else "unavailable", "generalSearch": capability}
