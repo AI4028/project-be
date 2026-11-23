@@ -75,6 +75,8 @@ def _own_active_session(db: Session, device: Device, session_id: str, now: int) 
         raise AppError("not-your-session", "This connection belongs to someone else.")
     if session.status != "active" or _is_idle(session, now):
         raise AppError("session-expired", "The connection ended. Please reconnect to the kiosk.")
+    if session.kiosk_id is None:
+        raise AppError("kiosk-pairing-required", "Connect to a kiosk before starting an order.")
     return session
 
 
@@ -188,57 +190,6 @@ def connect_to_kiosk(db: Session, device: Device, kiosk_id: Any, token: Any, now
     return transact(db, run)
 
 
-def start_store_session(db: Session, device: Device, store_id: str, now: int, *, items: list | None = None) -> dict[str, Any]:
-    """Give the phone its own cart without entering the kiosk's active-session slot."""
-    def run() -> dict[str, Any]:
-        store = db.get(Store, store_id, populate_existing=True, with_for_update=True)
-        if store is None:
-            raise AppError("store-not-found", "Store not found.")
-        if store.ordering_paused:
-            raise AppError("ordering-paused", "This store is not taking phone orders right now.")
-        staff_terminal = db.scalar(select(Kiosk.id).where(
-            Kiosk.store_id == store_id, Kiosk.api_key_hash.is_not(None),
-        ).limit(1))
-        if staff_terminal is None:
-            raise AppError("ordering-unavailable", "This store is not set up to receive phone orders.")
-        # Validate and price a replacement before accepting the destination cart.
-        cart = None
-        if items is not None:
-            if not items:
-                raise AppError("bad-request", "Choose an item before switching stores.")
-            cart = _cart_for(db, store_id, items)
-            cart["quoteId"] = str(uuid.uuid4())
-        existing = db.scalar(select(KioskSession).where(
-            KioskSession.device_id == device.id,
-            KioskSession.store_id == store_id,
-            KioskSession.kiosk_id.is_(None),
-            KioskSession.status == "active",
-        ).with_for_update().execution_options(populate_existing=True))
-        if existing is not None:
-            if not _is_idle(existing, now):
-                if cart is not None:
-                    existing.cart = cart
-                existing.last_active_at = now
-                return session_dict(existing)
-            existing.status = "expired"
-            existing.ended_at = now
-            db.flush()
-        session = KioskSession(
-            id=str(uuid.uuid4()),
-            store_id=store_id,
-            device_id=device.id,
-            status="active",
-            created_at=now,
-            last_active_at=now,
-            help_requested=False,
-            cart=cart or {"lines": [], "total": 0, "summary": ""},
-        )
-        db.add(session)
-        return session_dict(session)
-
-    return transact(db, run)
-
-
 # ---------- phone: server-priced cart ----------
 
 
@@ -296,8 +247,6 @@ def submit_order(
         lines, total = build_order_lines(store_menu(db, session.store_id, lock=True), items)
         if db.get(Store, session.store_id).ordering_paused:
             raise AppError("ordering-paused", "This store is not taking phone orders right now.")
-        if session.kiosk_id is None and (not quote_id or not request_key):
-            raise AppError("price-changed", "Review a current quote before sending an order.")
         if quote_id is not None and (session.cart.get("quoteId") != quote_id
                                     or session.cart.get("lines") != lines or session.cart.get("total") != total):
             raise AppError("price-changed", "Refresh the cart and confirm its current price before ordering.")
