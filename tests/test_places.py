@@ -138,36 +138,3 @@ def test_place_search_matches_registered_store_menus_even_when_provider_fails(en
     assert result["status"] == "results"
     assert result["generalSearch"] == "unavailable"
     assert any(place["storeId"] == "gist-cafe" for place in result["places"])
-
-
-def test_find_nearby_ranks_pedestrian_routes_and_retains_unroutable_cafe(env, monkeypatch):
-    from app import walking_routes
-    monkeypatch.setenv("TMAP_APP_KEY", "test-tmap")
-    venues = [
-        {"storeId": name, "name": name, "location": {"lat": 37.55, "lng": x}}
-        for name, x in [("detour", 127.05), ("short", 127.06), ("offline", 127.07)]
-    ]
-    monkeypatch.setattr(places, "kakao_search", lambda *args: venues)
-    seen = []
-
-    def route(request, timeout):
-        body = json.loads(request.data)
-        seen.append(body)
-        assert request.full_url == "https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1"
-        assert request.get_header("Appkey") == "test-tmap"
-        assert (body["startX"], body["startY"]) == (127.056, 37.5445)
-        if body["endX"] == 127.07:
-            raise URLError("offline")
-        distance = 1500 if body["endX"] == 127.05 else 600
-        return BytesIO(json.dumps({"features": [{"properties": {
-            "totalDistance": distance, "totalTime": distance // 2,
-        }}]}).encode())
-
-    monkeypatch.setattr(walking_routes, "urlopen", route)
-    response = env.client.get("/places/search?lat=37.5445&lng=127.056").json()
-    cafes = [p for p in response["places"] if "walkingRoute" in p]
-    assert [p["storeId"] for p in cafes] == ["short", "detour", "offline"]
-    assert cafes[0]["walkingRoute"] == {"distanceM": 600, "durationS": 300}
-    assert cafes[2]["walkingRoute"] is None
-    env.client.get("/places/search?q=cafe&lat=37.5445&lng=127.056")
-    assert len(seen) == 3

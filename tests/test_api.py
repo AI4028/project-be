@@ -44,35 +44,63 @@ def error(res, status: int, code: str) -> None:
 # ---------- tests ----------
 
 
-def test_pairing_gates_menus_and_legacy_checkout(env):
-    from app.auth import device_for_token
-    from app.models import KioskSession
-
+def test_preorder_help_from_a_code_free_session_reaches_its_venue(env):
     phone = new_phone(env)
-    assert "menu" not in env.client.get("/stores/gist-cafe").json()
-    error(env.client.post("/stores/gist-cafe/sessions", headers=phone), 409, "kiosk-pairing-required")
-    error(env.client.put("/stores/gist-cafe/cart", headers=phone, json={"items": AMERICANO}), 409, "kiosk-pairing-required")
-    with env.db() as db:
-        device = device_for_token(db, phone["Authorization"].split()[1])
-        db.add(KioskSession(
-            id="legacy", device_id=device.id, store_id="gist-cafe", status="active",
-            created_at=env.clock.now, last_active_at=env.clock.now,
-            cart={"lines": [], "total": 0, "summary": ""},
-        ))
-        db.commit()
-    error(env.client.get("/sessions/legacy/store", headers=phone), 409, "kiosk-pairing-required")
-    assert "menu" not in env.client.get("/sessions/legacy/state", headers=phone).json()["store"]
-    error(env.client.put("/sessions/legacy/cart", headers=phone, json={"items": AMERICANO}), 409, "kiosk-pairing-required")
-    error(env.client.post("/sessions/legacy/order", headers=phone, json={"items": AMERICANO}), 409, "kiosk-pairing-required")
-    assert not env.client.get("/orders", headers=phone).json()
+    session = env.client.post("/stores/gist-cafe/sessions", headers=phone).json()
+    session_id = session["sessionId"]
+    path = f"/sessions/{session_id}"
+    assert env.client.post(f"{path}/help", headers=phone).status_code == 200
+    assert env.client.get(f"{path}", headers=phone).json()["helpState"] == "sent"
+    assert env.client.get("/kiosk/state", headers=env.kiosk).json()["helpRequests"] == [
+        {"sessionId": session_id, "orderNumber": None}
+    ]
+    assert env.client.get("/kiosk/state", headers=env.other_kiosk).json()["helpRequests"] == []
+    assert env.client.post(f"/kiosk/sessions/{session_id}/resolve-help", headers=env.kiosk).status_code == 200
+    assert env.client.get(f"{path}", headers=phone).json()["helpState"] == "acknowledged"
 
-    response = connect(env, phone)
-    assert response.status_code == 201
-    path = f"/sessions/{response.json()['sessionId']}/store"
-    assert env.client.get(path, headers=phone).json()["menu"][0]["id"] == "americano"
-    error(env.client.get(path, headers=new_phone(env)), 404, "session-not-found")
-    env.clock.advance(config.SESSION_IDLE_MS)
-    error(env.client.get(path, headers=phone), 409, "session-expired")
+
+def test_store_order_does_not_reserve_kiosk_and_reaches_only_store_staff(env):
+    paired_phone, paired_id = connected(env)
+    customer = new_phone(env)
+    store_url = "/stores/gist-cafe/sessions"
+    response = env.client.post(store_url, headers=customer)
+    assert response.status_code == 201, response.text
+    cart_id = response.json()["sessionId"]
+    assert response.json()["kioskId"] is None
+    assert env.client.post(store_url, headers=customer).json()["sessionId"] == cart_id
+    assert env.client.get("/kiosk/session", headers=env.kiosk).json()["sessionId"] == paired_id
+    error(env.client.get(f"/sessions/{cart_id}", headers=paired_phone), 404, "session-not-found")
+
+    with env.client.websocket_connect(f"/ws/kiosk?token={env.kiosk_key}") as staff:
+        cart_url = f"/sessions/{cart_id}/cart"
+        quote = env.client.put(cart_url, json={"items": AMERICANO}, headers=customer).json()
+        order_url = f"/sessions/{cart_id}/order"
+        error(env.client.post(order_url, json={"items": AMERICANO}, headers=customer), 409, "price-changed")
+        body = {"items": AMERICANO, "quoteId": quote["quoteId"], "paymentMethod": "kiosk"}
+        headers = {**customer, "Idempotency-Key": f"order:{cart_id}"}
+        assert env.client.put("/kiosk/ordering", json={"paused": True}, headers=env.kiosk).status_code == 200
+        assert staff.receive_json()["type"] == "ordering"
+        error(env.client.post(order_url, json=body, headers=headers), 409, "ordering-paused")
+        assert env.client.put("/kiosk/ordering", json={"paused": False}, headers=env.kiosk).status_code == 200
+        assert staff.receive_json()["type"] == "ordering"
+        order = env.client.post(order_url, json=body, headers=headers).json()
+        assert order["total"] == quote["total"]
+        assert staff.receive_json()["type"] == "ordered"
+        assert env.client.post(order_url, json=body, headers=headers).json()["orderId"] == order["orderId"]
+
+    order_id = order["orderId"]
+    assert env.client.get("/orders", headers=customer).json()[0]["storeId"] == "gist-cafe"
+    assert env.client.get("/orders", headers=paired_phone).json() == []
+    assert env.client.get("/kiosk/orders", headers=env.other_kiosk).json() == []
+    assert env.client.get("/kiosk/session", headers=env.kiosk).json()["sessionId"] == paired_id
+    assert env.client.post(f"/orders/{order_id}/help", headers=customer).status_code == 200
+    assert env.client.get("/kiosk/state", headers=env.kiosk).json()["helpRequests"] == [
+        {"sessionId": cart_id, "orderNumber": order["orderNumber"]},
+    ]
+    error(env.client.post(f"/kiosk/sessions/{cart_id}/resolve-help", headers=env.other_kiosk), 404, "session-not-found")
+    assert env.client.post(f"/kiosk/sessions/{cart_id}/resolve-help", headers=env.kiosk).status_code == 200
+    assert env.client.get(f"/orders/{order_id}", headers=customer).json()["helpState"] == "acknowledged"
+    assert env.client.get("/kiosk/state", headers=env.kiosk).json()["helpRequests"] == []
 
 
 def test_full_flow_with_live_updates(env):
@@ -225,7 +253,7 @@ def test_staff_can_mark_items_sold_out(env):
     phone, session_id = connected(env)
     res = env.client.put("/kiosk/menu/americano/availability", json={"available": False}, headers=env.kiosk)
     assert res.json() == {"itemId": "americano", "available": False}
-    menu = {m["id"]: m for m in env.client.get(f"/sessions/{session_id}/store", headers=phone).json()["menu"]}
+    menu = {m["id"]: m for m in env.client.get("/stores/gist-cafe").json()["menu"]}
     assert menu["americano"]["available"] is False
     error(env.client.put(f"/sessions/{session_id}/cart", json={"items": AMERICANO}, headers=phone), 409, "item-unavailable")
     env.client.put("/kiosk/menu/americano/availability", json={"available": True}, headers=env.kiosk)
@@ -247,7 +275,7 @@ def test_staff_can_pause_and_resume_phone_orders(env):
 
     store = env.client.get("/stores/gist-cafe").json()
     assert store["orderingPaused"] is True
-    assert env.client.get(f"/sessions/{session_id}/store", headers=phone).json()["menu"]
+    assert store["menu"], "menus stay visible while paused"
     assert env.client.get("/kiosk/state", headers=env.kiosk).json()["store"]["orderingPaused"] is True
     error(connect(env, new_phone(env)), 409, "ordering-paused")
     # A phone already connected can keep its cart but cannot send the order.
@@ -279,19 +307,19 @@ def test_a_sent_order_replays_even_after_ordering_is_paused(env):
 def test_store_info_for_accessibility_and_menus(env):
     stores = {s["storeId"]: s for s in env.client.get("/stores").json()}
     gist = stores["gist-cafe"]
-    assert "menuSuggestions" not in gist
+    assert gist["menuSuggestions"][0]["name"] == env.client.get("/stores/gist-cafe").json()["menu"][0]["name"]
     assert "menu" not in gist
     assert gist["location"] == {"lat": 35.2286, "lng": 126.8436}
     assert gist["orderingMethods"] == ["kiosk", "phone", "staff"]
     assert "stepFreeEntrance" in gist["accessibility"]
-    menu = env.client.get("/kiosk/state", headers=env.kiosk).json()["store"]["menu"]
+    menu = env.client.get("/stores/gist-cafe").json()["menu"]
     assert [m["id"] for m in menu][:2] == ["americano", "cafe-latte"]
     error(env.client.get("/stores/nope"), 404, "store-not-found")
     assert env.client.get("/kiosks/GK01").json()["name"] == "키오스크 1"
 
 
 def test_seeded_menu_photos_are_served_at_their_database_urls(env):
-    menu = env.client.get("/kiosk/state", headers=env.kiosk).json()["store"]["menu"]
+    menu = env.client.get("/stores/gist-cafe").json()["menu"]
     photos = {item["id"]: item["imageUrl"] for item in menu if item.get("imageUrl")}
     assert set(photos) == {"americano", "cafe-latte", "vanilla-latte", "grapefruit-ade"}
     for url in photos.values():
@@ -321,7 +349,7 @@ def test_store_pickup_location_and_photos(env):
     info = env.client.get("/stores/photo-cafe").json()
     assert info["pickupLocation"] == "카운터 오른쪽 낮은 선반, 높이 약 75cm"
     assert info["imageUrl"] == "https://example.com/store.jpg"
-    assert "menu" not in info
+    assert info["menu"][0]["imageUrl"] == "https://example.com/tea.jpg"
     assert (info["phone"], info["hours"], info["hoursEn"]) == ("062-715-0000", "09:00–21:00", "9 AM – 9 PM")
     listed = {s["storeId"]: s for s in env.client.get("/stores").json()}
     assert listed["photo-cafe"]["imageUrl"] == "https://example.com/store.jpg"
@@ -451,6 +479,22 @@ def test_checkout_method_survives_order_and_staff_lookup(env, method, monkeypatc
     assert env.client.get("/kiosk/orders", headers=env.kiosk).json()[0]["paymentMethod"] == method
 
 
+def test_switch_store_only_replaces_cart_after_destination_accepts(env):
+    phone, old_id = connected(env)
+    previous = env.client.put(f"/sessions/{old_id}/cart", headers=phone, json={"items": AMERICANO}).json()
+    path = "/stores/other-cafe/cart"
+    tea = {"items": [{"itemId": "tea", "qty": 1, "options": {}}]}
+    env.client.put("/kiosk/ordering", headers=env.other_kiosk, json={"paused": True})
+    error(env.client.put(path, headers=phone, json=tea), 409, "ordering-paused")
+    env.client.put("/kiosk/ordering", headers=env.other_kiosk, json={"paused": False})
+    error(env.client.put(path, headers=phone, json={"items": AMERICANO}), 404, "unknown-item")
+    original = env.client.get(f"/sessions/{old_id}", headers=phone).json()
+    assert original["status"] == "active" and original["cart"]["quoteId"] == previous["quoteId"]
+    accepted = env.client.put(path, headers=phone, json=tea).json()
+    assert accepted["cart"]["total"] == 3000
+    assert env.client.put(path, headers=phone, json=tea).json()["sessionId"] == accepted["sessionId"]
+
+
 def test_live_checkout_accepts_payment_at_cafe_and_rejects_simulation(env):
     phone, session_id = connected(env)
     path = f"/sessions/{session_id}/order"
@@ -462,9 +506,10 @@ def test_live_checkout_accepts_payment_at_cafe_and_rejects_simulation(env):
 
 
 def test_counter_order_keeps_quoted_option_prices_through_kiosk_and_history(env):
-    phone, session_id = connected(env)
+    phone = new_phone(env)
     assert env.client.get("/orders", headers=phone).json() == []
-    url = f"/sessions/{session_id}"
+    session = env.client.post("/stores/gist-cafe/sessions", headers=phone).json()
+    url = f"/sessions/{session['sessionId']}"
     items = [{"itemId": "cafe-latte", "qty": 2, "options": {"temp": "ice", "milk": "oat"}}]
     quote = env.client.put(f"{url}/cart", json={"items": items}, headers=phone).json()
     [line] = quote["lines"]
@@ -476,7 +521,7 @@ def test_counter_order_keeps_quoted_option_prices_through_kiosk_and_history(env)
 
     placed = env.client.post(
         f"{url}/order",
-        headers={**phone, "Idempotency-Key": f"order:{session_id}"},
+        headers={**phone, "Idempotency-Key": f"order:{session['sessionId']}"},
         json={"items": items, "quoteId": quote["quoteId"], "paymentMethod": "counter"},
     )
     assert placed.status_code == 201, placed.text
@@ -495,8 +540,10 @@ def test_counter_order_keeps_quoted_option_prices_through_kiosk_and_history(env)
         assert details["lines"] == quote["lines"]
 
 
-def test_preorder_help_is_visible_to_its_paired_kiosk_until_acknowledged(env):
-    phone, session_id = connected(env)
+def test_preorder_help_is_queued_for_its_venue_until_acknowledged(env):
+    phone = new_phone(env)
+    session = env.client.post("/stores/gist-cafe/sessions", headers=phone).json()
+    session_id = session["sessionId"]
     path = f"/sessions/{session_id}"
     acknowledge = f"/kiosk/sessions/{session_id}/resolve-help"
     error(env.client.post(acknowledge, headers=env.kiosk), 409, "no-help-request")
@@ -505,7 +552,9 @@ def test_preorder_help_is_visible_to_its_paired_kiosk_until_acknowledged(env):
     for _ in range(2):
         assert env.client.post(f"{path}/help", headers=phone).status_code == 200
     assert env.client.get(path, headers=phone).json()["helpState"] == "sent"
-    assert env.client.get("/kiosk/session", headers=env.kiosk).json()["helpState"] == "sent"
+    assert env.client.get("/kiosk/state", headers=env.kiosk).json()["helpRequests"] == [
+        {"sessionId": session_id, "orderNumber": None}
+    ]
     assert env.client.get("/kiosk/state", headers=env.other_kiosk).json()["helpRequests"] == []
     error(env.client.post(acknowledge, headers=env.other_kiosk), 404, "session-not-found")
 
