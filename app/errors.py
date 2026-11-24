@@ -24,6 +24,8 @@ _STATUS = {
     "photo-too-large": 413,
     "invalid-photo": 415,
     "places-unavailable": 503,
+    "route-unavailable": 503,
+    "route-busy": 429,
     "not-signed-in": 401,
     "not-kiosk": 401,
     "token-invalid": 403,
