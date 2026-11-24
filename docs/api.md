@@ -28,7 +28,7 @@ Functions: [main.py](../app/main.py), [public.py](../app/routers/public.py).
 | `GET /health` | `health_check` | `{"status":"ok"}`. Does not check the database. |
 | `GET /stores` | `list_stores` | All stores, sorted by name, without menus. |
 | `GET /stores/nearby` | `nearby_stores` | Required `lat`, `lng`; optional `radiusM` (default 2000, range 1–20000). Stores without menus, nearest first, with `distanceM` and `insideGeofence`. |
-| `GET /stores/{store_id}` | `get_store` | One store with accessibility info, ordering methods, kiosk features, indoor directions and full menu. |
+| `GET /stores/{store_id}` | `get_store` | One store with accessibility info, ordering methods, kiosk features and indoor directions. |
 | `GET /kiosks/{kiosk_id}` | `get_kiosk` | `kioskId`, `storeId`, `name`, `nameEn`. |
 
 Nearby search accepts latitude −90 to 90 and longitude −180 to 180.
@@ -44,8 +44,8 @@ Functions: [phone.py](../app/routers/phone.py). Phone auth required except regis
 | `DELETE /devices/me` | `revoke_device` | Revokes the current phone token, releases its active kiosks and closes its sockets. |
 | `POST /devices` | `register_device` | No body → anonymous `deviceId` and `token`; no sign-up. |
 | `POST /sessions` | `connect` | `kioskId`, `token` → `connected` event with `sessionId`, store and kiosk details. |
-| `POST /stores/{store_id}/sessions` | `start_store_ordering` | No body → active cart session for the authenticated device and store. `kioskId` is null. A repeated request restores an active cart. |
-| `GET /sessions/{session_id}/state` | `phone_state` | Own session, order (or `null`) and current store/menu for reconnect recovery. |
+| `GET /sessions/{session_id}/store` | `paired_store` | Store and full menu for the phone’s active kiosk pairing. |
+| `GET /sessions/{session_id}/state` | `phone_state` | Own session, order (or `null`) and store information. Includes the full menu while the kiosk pairing is active. |
 | `GET /sessions/{session_id}` | `get_session` | No body → own session: status, cart, help flag, order ID and last activity time. |
 | `PUT /sessions/{session_id}/cart` | `update_cart` | `items` → replaces the cart; returns `cart` event with priced `lines`, `total`, `summary`. `[]` clears it. |
 | `POST /sessions/{session_id}/order` | `place_order` | `items`, optional `paymentMethod`, `note` → `ordered` event with `orderId`, `orderNumber`, total and status. Frees the kiosk. |
@@ -75,14 +75,13 @@ Item and option IDs come from the store's menu.
 - Single-choice options take a string; multi-choice options take an array. Include every required option.
 - For live orders, use `paymentMethod: "counter"` (default) or `"kiosk"`. The customer pays in person. Demo backends with `DEMO_MODE=1` also accept `simulatePayment: true` and the methods `card`, `kakaopay`, `tosspay`, and `naverpay`. Demo orders record a `simulatedApprovedAmount`. Each order accepts a `note` of up to 200 characters.
 - Order numbers start at 1 per store and reset at midnight KST. Submission sets the session to `ordered`; start a new session for the next order.
-- Code-free sessions require a configured staff kiosk and use a current `quoteId` and stable `Idempotency-Key` to submit. The staff console receives direct orders and help requests for its store.
+- Phone orders require an active kiosk pairing. Send the current `quoteId` and a stable `Idempotency-Key` for safe retries. The former store cart and session routes return `409 kiosk-pairing-required`.
 
 ### Staff help delivery
 
 Browsing a venue requires no session. To send an in-app request before ordering,
 the phone uses its active session at that venue. A paired request appears in the
-paired kiosk’s active session. A code-free cart request appears in the venue’s
-`helpRequests` list in `GET /kiosk/state`. After submission, the phone uses the
+paired kiosk’s active session. After submission, the phone uses the
 open order’s help endpoint and the request appears in the venue queue with its
 order number. A successful POST means the server recorded the request. The
 customer sees `acknowledged` after staff use the resolve-help endpoint.
@@ -109,9 +108,12 @@ Staff can cancel from `submitted` or `accepted`; the phone can cancel only from
 
 ## Bluetooth advertisement
 
-Intended payload: `LK` + four-character kiosk ID + eight-character token,
-e.g. `LKGK017H3KQ9ZC`. Split into `kioskId` and `token` for pairing.
-The Arduino prototype does not send this yet: [hardware gaps](hardware.md#known-gaps).
+Payload: `LK` + four-character kiosk ID + eight-character token,
+e.g. `LKGK017H3KQ9ZC`. Split into `kioskId` and `token` for pairing. The
+kiosk ID resolves to the registered store and its location. The payload contains
+the kiosk ID and pairing code.
+The ESP32 firmware advertises this payload as the BLE complete local name.
+See the [pairing bridge and firmware](hardware.md#ble-pairing-bridge).
 
 Tokens rotate about every 30 seconds and expire after 60 seconds. The previous
 token works until its original expiry. One phone per kiosk; the same phone can
@@ -217,9 +219,3 @@ raw JPEG, PNG or WebP bytes (up to 1 MiB and 16 megapixels) to
 response contains `itemId` and the new stable `imageUrl`. The server resizes
 the photo and strips metadata. Catalog URLs can be fetched without a kiosk
 key. Each read redirects to a short-lived private-bucket URL.
-
-
-When a customer confirms a store change, send the new cart's `items` to
-`PUT /stores/{store_id}/cart` with the device token. The response is the
-destination session and server-priced cart. Persist the new session before
-ending the old one. A rejected destination leaves the original cart open.
