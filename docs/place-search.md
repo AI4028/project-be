@@ -23,4 +23,4 @@ records, not real-time functionality checks or accessible route guidance.
 Data attribution and provenance are in `app/data/accessibility/NOTICE.md`.
 No database migration or new runtime package is required.
 
-For Find nearby, set server-only `TMAP_APP_KEY` to an app key with pedestrian routing access. Each routed venue includes `walkingRoute.distanceM` and `walkingRoute.durationS` for the shortest pedestrian route. A null route leaves the venue available for straight-line display. Text searches and station results do not request walking routes.
+Find nearby returns registered venues and Kakao cafés. Stations are available through text search or `kind=stations`. For walking distances, set server-only `TMAP_APP_KEY` to an app key with pedestrian routing access. Each routed venue includes `walkingRoute.distanceM` and `walkingRoute.durationS` for the shortest pedestrian route. A null route leaves the venue available for straight-line display. Text searches and station results do not request walking routes.

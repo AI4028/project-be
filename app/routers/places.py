@@ -74,12 +74,13 @@ def search_places(q: str = Query("", max_length=100),
     db: Session = Depends(get_db)):
     if (lat is None) != (lng is None):
         raise AppError("bad-request", "Provide both latitude and longitude.")
+    q = q.strip()
     if lat is not None and not in_korea(lat, lng):
-        if not q.strip() or kind not in ("all", "stations"):
+        if not q or kind not in ("all", "stations"):
             return {"places": [], "status": "outside-coverage", "generalSearch": "unavailable"}
         # A named destination can be searched before arriving in Korea.
         lat = lng = None
-    stations = station_places(q, lat, lng)
+    stations = station_places(q, lat, lng) if q or kind == "stations" else []
     if kind not in ("all", "stations"):
         if lat is None and stations:
             lat, lng = stations[0]["location"]["lat"], stations[0]["location"]["lng"]
@@ -87,23 +88,23 @@ def search_places(q: str = Query("", max_length=100),
             return {"places": [], "status": "needs-location", "generalSearch": "not-requested"}
         places, status = feature_places(kind, lat, lng)
         return {"places": places, "status": status, "generalSearch": "not-requested"}
-    if kind == "stations" or (not q.strip() and lat is None):
+    if kind == "stations" or (not q and lat is None):
         return {"places": stations, "status": "results" if stations else "empty", "generalSearch": "not-requested"}
     provider_error = None
     try:
-        venues = kakao_search(q.strip(), lat, lng)
+        venues = kakao_search(q, lat, lng)
         capability = "available" if venues is not None else "not-configured"
     except AppError as error:
         venues, capability = [], "unavailable"
         provider_error = error
     cafes = [*registered_places(db, q, lat, lng), *(venues or [])]
-    if not q.strip() and lat is not None:
+    if not q and lat is not None:
         add_walking_routes(cafes, lat, lng)
         cafes.sort(key=lambda cafe: cafe["walkingRoute"]["distanceM"] if cafe["walkingRoute"] else float("inf"))
     places = [*cafes, *stations]
     if provider_error and not places:
         raise provider_error
-    return {"places": places, "status": "results" if places else "empty" if q.strip() or capability == "available" else "unavailable", "generalSearch": capability}
+    return {"places": places, "status": "results" if places else "empty" if q or capability == "available" else "unavailable", "generalSearch": capability}
 
 @router.get("/accessibility/nearby")
 def nearby_accessibility(lat: float = Query(ge=-90, le=90), lng: float = Query(ge=-180, le=180), radiusM: int = Query(300, ge=25, le=1000)):
