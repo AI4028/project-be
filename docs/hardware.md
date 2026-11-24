@@ -24,12 +24,23 @@ clock and accepts ASCII `ADV <payload> <lifetimeMs>` lines terminated by LF, wit
 lifetime from 1 through 60000 ms. It discards malformed lines without refreshing
 the deadline and resumes parsing after the next line break.
 
-The sketch targets the **ESP32 Dev Module** with the Bluedroid stack in Arduino
-ESP32 core **3.3.7**. With that core installed, build it without a board attached.
+The sketch builds with Arduino ESP32 core **3.3.x** for two radio stacks:
+
+- **XIAO ESP32-C3 / S3 / C6** use NimBLE (Bluedroid is disabled there). The
+  sketch calls the NimBLE GAP API directly (`ble_gap_adv_set_data`,
+  `ble_gap_adv_start`); the Arduino `BLEAdvertising` wrapper crashed on the
+  XIAO ESP32-C3 (null pointer on the first `ADV` line). Tested on a XIAO ESP32-C3:
+  the phone sees `LKGK01…` with the kiosk's current code.
+- **ESP32 Dev Module** uses Bluedroid through `BLEAdvertising`.
+
+With the core installed, build it without a board attached.
 
 ```sh
+arduino-cli compile --fqbn esp32:esp32:XIAO_ESP32C3 hardware/galjido_ble_beacon
 arduino-cli compile --fqbn esp32:esp32:esp32 hardware/galjido_ble_beacon
 ```
+
+Attach the XIAO's external antenna; without it the signal is weak and jumpy.
 
 To test the same frame parser, advertisement bytes, and expiry logic on a
 computer with a C++11 compiler, run the fake-radio test from the repository root.
@@ -40,6 +51,37 @@ c++ -std=c++11 -Wall -Wextra -Werror -pedantic \
   hardware/tests/ble_beacon_test.cpp -o /tmp/galjido-ble-beacon-test
 /tmp/galjido-ble-beacon-test
 ```
+
+## Position boards (three-board kiosk finding)
+
+The app's kiosk finder (`project-fe`, `src/lib/ble-position.ts`) can use two extra
+boards at measured spots next to the kiosk board, to work out the phone's position
+and point an arrow to the kiosk. Each runs
+[`galjido_ble_anchor`](../hardware/galjido_ble_anchor/) and broadcasts a fixed
+local name, `LA` + kiosk id + letter (`LAGK01B`, `LAGK01C`), in a legacy,
+non-connectable advertisement every 100–150 ms. It needs only USB power: no
+bridge, laptop or network. Set `KIOSK_ID` and `ANCHOR_LETTER` (`'B'` or `'C'`) at
+the top of the sketch before flashing each board. The Serial Monitor (115200)
+prints `GALJIDO ANCHOR READY LAGK01B`, then `ANCHOR ON LAGK01B`.
+
+```sh
+arduino-cli compile --fqbn esp32:esp32:XIAO_ESP32C3 hardware/galjido_ble_anchor
+```
+
+Placement and setup:
+
+1. Place the kiosk board and boards B and C in a triangle, 2–3 m apart, at chest
+   height, with the customers' path (door to kiosk) inside or near the triangle.
+2. Measure in metres with the kiosk board as (0, 0) and "forward" toward board B.
+   Example: B (0, 4) and C (3, 2), where C is 3 m to the right and 2 m forward.
+3. On the phone's kiosk finder, open **보드 3개 설정**:
+   - enter the spots;
+   - at the kiosk, face board B and save the forward direction;
+   - calibrate each board from 1 m.
+
+In simulation, the position inside the triangle is within about 1 m and the arrow
+within about 5–15°. Outside the triangle, the app reports that the position is
+unsure and falls back to one-board guidance.
 
 ## Arduino Bluetooth Classic prototype
 
