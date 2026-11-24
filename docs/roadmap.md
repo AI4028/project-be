@@ -13,7 +13,7 @@ integration is on `feature/ordering-readiness` in the adjacent
 | Priority | Task | Why / done when |
 | --- | --- | --- |
 | 1 | Replace the demo cafe data. | Prices, location and accessibility values are placeholders. Visit the store and update [gist-cafe.json](../seed/gist-cafe.json), including indoor directions. |
-| 2 | Verify the full phone and staff flow. | Pair using the kiosk’s BLE broadcast, QR code, or manual code, request help, submit a pay-at-café order, and check staff acknowledgement and order status. Test screen readers, large text and contrast on real devices. |
+| 2 | Verify the full phone and staff flow. | Use a code-free cart or kiosk code, request help, submit a pay-at-café order, and check staff acknowledgement and order status. Test screen readers, large text and contrast on real devices. |
 
 ## Backend work completed
 

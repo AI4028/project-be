@@ -18,7 +18,7 @@ from app.models import Kiosk
 from app.realtime import hub
 from app.schemas import AvailabilityIn, OrderingIn, StatusIn
 from app.responses import KioskState
-from app.routers.public import read_store
+from app.routers.public import get_store
 
 router = APIRouter(prefix="/kiosk", tags=["kiosk"])
 
@@ -30,7 +30,7 @@ def kiosk_state(kiosk: Kiosk = Depends(current_kiosk), db: Session = Depends(get
     return {"photoUploadsEnabled": menu_photos.sample_in_bucket("menu/americano.jpg"),
             "session": service.kiosk_active_session(db, kiosk, now),
             "orders": service.kiosk_orders(db, kiosk, now),
-            "store": read_store(kiosk.store_id, db, with_menu=True),
+            "store": get_store(kiosk.store_id, db),
             "helpRequests": service.kiosk_help_requests(db, kiosk, now)}
 
 

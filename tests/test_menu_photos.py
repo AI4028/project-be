@@ -26,7 +26,7 @@ def bucket(monkeypatch):
 
 
 def item(env):
-    menu = env.client.get("/kiosk/state", headers=env.kiosk).json()["store"]["menu"]
+    menu = env.client.get("/stores/gist-cafe").json()["menu"]
     return next(i for i in menu if i["id"] == "americano")
 
 

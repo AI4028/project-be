@@ -16,9 +16,8 @@ from app.models import Device
 from app.limits import registration_limit, pairing_limit
 from app.realtime import hub
 from app.schemas import CartIn, ConnectIn, OrderIn
-from app.responses import PhoneState, StoreOut
-from app.routers.public import read_store
-from app.errors import AppError
+from app.responses import PhoneState
+from app.routers.public import get_store
 
 router = APIRouter(tags=["phone"])
 
@@ -29,20 +28,7 @@ def phone_state(session_id: str, device: Device = Depends(current_device),
     """Restore session, order and menu after a connection gap."""
     session = service.get_my_session(db, device, session_id, now)
     order = service.get_my_order(db, device, session["orderId"]) if session["orderId"] else None
-    menu_visible = session["status"] == "active" and session["kioskId"] is not None
-    return {"session": session, "order": order, "store": read_store(session["storeId"], db, with_menu=menu_visible)}
-
-
-@router.get("/sessions/{session_id}/store", response_model=StoreOut, response_model_exclude_unset=True)
-def paired_store(session_id: str, device: Device = Depends(current_device),
-                 db: Session = Depends(get_db), now: int = Depends(get_now)):
-    """Return the menu for this phone's active paired kiosk."""
-    session = service.get_my_session(db, device, session_id, now)
-    if session["status"] != "active":
-        raise AppError("session-expired", "The connection ended. Please reconnect to the kiosk.")
-    if session["kioskId"] is None:
-        raise AppError("kiosk-pairing-required", "Connect to a kiosk to see its menu and order.")
-    return read_store(session["storeId"], db, with_menu=True)
+    return {"session": session, "order": order, "store": get_store(session["storeId"], db)}
 
 
 @router.delete("/devices/me")
@@ -78,11 +64,18 @@ def connect(
     return ev
 
 
-@router.post("/stores/{store_id}/sessions", dependencies=[Depends(current_device)])
-@router.put("/stores/{store_id}/cart", dependencies=[Depends(current_device)])
-def legacy_store_ordering(store_id: str):
-    """Direct older clients to the kiosk pairing flow."""
-    raise AppError("kiosk-pairing-required", "Connect to a kiosk before starting an order.")
+@router.post("/stores/{store_id}/sessions", dependencies=[Depends(pairing_limit)], status_code=201, response_model=SessionOut)
+def start_store_ordering(store_id: str, device: Device = Depends(current_device),
+                         db: Session = Depends(get_db), now: int = Depends(get_now)):
+    """Start or recover a cart for this phone at a store without reserving a kiosk."""
+    return service.start_store_session(db, device, store_id, now)
+
+
+@router.put("/stores/{store_id}/cart", dependencies=[Depends(pairing_limit)], response_model=SessionOut)
+def prepare_store_cart(store_id: str, body: CartIn, device: Device = Depends(current_device),
+                       db: Session = Depends(get_db), now: int = Depends(get_now)):
+    """Accept a replacement cart without releasing the customer's current session."""
+    return service.start_store_session(db, device, store_id, now, items=body.items)
 
 
 @router.get("/sessions/{session_id}", response_model=SessionOut, response_model_exclude_unset=True)

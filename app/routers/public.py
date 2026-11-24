@@ -45,8 +45,17 @@ def store_dict(store: Store, with_menu: bool) -> dict[str, Any]:
 
 @router.get("/stores", response_model=list[StoreOut], response_model_exclude_unset=True)
 def list_stores(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
-    """Store summaries for discovery."""
-    return [store_dict(store, with_menu=False) for store in db.scalars(select(Store).order_by(Store.name))]
+    """Store summaries and short, localized suggestions for discovery."""
+    stores = []
+    for store in db.scalars(select(Store).order_by(Store.name)):
+        summary = store_dict(store, with_menu=False)
+        summary["menuSuggestions"] = [
+            {field: item[field] for field in ("name", "nameEn") if item.get(field)}
+            for item in sorted(store.menu or [], key=lambda item: item.get("sortOrder", 0))
+            if item.get("available", True) and item.get("name")
+        ][:5]
+        stores.append(summary)
+    return stores
 
 
 @router.get("/stores/nearby", response_model=list[StoreOut], response_model_exclude_unset=True)
@@ -68,17 +77,13 @@ def nearby_stores(
     return sorted(found, key=lambda s: s["distanceM"])
 
 
-def read_store(store_id: str, db: Session, *, with_menu: bool = False) -> dict[str, Any]:
+@router.get("/stores/{store_id}", response_model=StoreOut, response_model_exclude_unset=True)
+def get_store(store_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    """One store with its full menu."""
     store = db.get(Store, store_id)
     if store is None:
         raise AppError("store-not-found", "Store not found.")
-    return store_dict(store, with_menu=with_menu)
-
-
-@router.get("/stores/{store_id}", response_model=StoreOut, response_model_exclude_unset=True)
-def get_store(store_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
-    """Public store information for discovery and kiosk confirmation."""
-    return read_store(store_id, db)
+    return store_dict(store, with_menu=True)
 
 
 @router.get("/kiosks/{kiosk_id}", response_model=KioskOut, response_model_exclude_unset=True)
