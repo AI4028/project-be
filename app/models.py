@@ -130,6 +130,7 @@ class Order(Base):
     note: Mapped[str] = mapped_column(Text, default="")
     simulated_approved_amount: Mapped[int | None] = mapped_column(Integer)
     payment_method: Mapped[str] = mapped_column(String(16))
+    dining_option: Mapped[str | None] = mapped_column(String(16))
     # submitted | accepted | preparing | ready | picked_up | cancelled
     status: Mapped[str] = mapped_column(String(16))
     created_at: Mapped[int] = mapped_column(BigInteger)

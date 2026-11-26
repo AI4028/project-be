@@ -1,7 +1,7 @@
 ﻿"""Response contracts shared by HTTP endpoints and live events."""
 from typing import Any, Literal
 from pydantic import ConfigDict
-from app.schemas import CamelModel
+from app.schemas import CamelModel, DiningOption
 
 
 class DeviceOut(CamelModel):
@@ -107,6 +107,7 @@ class OrderOut(CamelModel):
     note: str
     simulated_approved_amount: int | None = None
     payment_method: Literal['counter', 'kiosk', 'card', 'kakaopay', 'tosspay', 'naverpay']
+    dining_option: DiningOption | None = None
     created_at_ms: int
     updated_at_ms: int
     help_state: Literal['idle', 'sent', 'acknowledged'] = 'idle'
@@ -140,6 +141,7 @@ class Ordered(Event):
     status: Literal['submitted']
     simulated_approved_amount: int | None = None
     payment_method: Literal['counter', 'kiosk', 'card', 'kakaopay', 'tosspay', 'naverpay']
+    dining_option: DiningOption | None = None
     note: str
     created_at_ms: int | None = None
     updated_at_ms: int | None = None

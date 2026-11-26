@@ -112,12 +112,40 @@ def test_full_flow_with_live_updates(env):
 
     mine = env.client.get(f"/orders/{order['orderId']}", headers=phone).json()
     assert mine["status"] == "ready"
+    assert mine["diningOption"] is None
     assert mine["lines"][0]["name"] == "아메리카노"
     error(env.client.get(f"/orders/{order['orderId']}", headers=new_phone(env)), 404, "order-not-found")
 
     queue = env.client.get("/kiosk/orders", headers=env.kiosk).json()
     assert [o["orderNumber"] for o in queue] == [1]
     assert env.client.get("/kiosk/session", headers=env.kiosk).json() is None, "kiosk is free after the order"
+
+
+@pytest.mark.parametrize("dining_option", ["dine_in", "takeaway"])
+def test_dining_option_reaches_staff_and_survives_order_retry(env, dining_option):
+    phone, session_id = connected(env)
+    url = f"/sessions/{session_id}/order"
+    headers = {**phone, "Idempotency-Key": f"order:{session_id}"}
+    body = {"items": AMERICANO, "diningOption": dining_option}
+    error(env.client.post(url, headers=headers, json={**body, "diningOption": "unknown"}), 400, "bad-request")
+
+    with env.client.websocket_connect(f"/ws/kiosk?token={env.kiosk_key}") as staff:
+        response = env.client.post(url, headers=headers, json=body)
+        assert response.status_code == 201, response.text
+        order = response.json()
+        assert order["diningOption"] == dining_option
+        assert staff.receive_json()["diningOption"] == dining_option
+
+    replay = env.client.post(url, headers=headers, json=body)
+    assert replay.status_code == 201
+    assert replay.json()["orderId"] == order["orderId"]
+    assert replay.json()["diningOption"] == dining_option
+    changed = "dine_in" if dining_option == "takeaway" else "takeaway"
+    error(env.client.post(url, headers=headers, json={**body, "diningOption": changed}), 409, "idempotency-conflict")
+
+    orders = env.client.get("/kiosk/state", headers=env.kiosk).json()["orders"]
+    assert [(entry["orderId"], entry["diningOption"]) for entry in orders] == [(order["orderId"], dining_option)]
+    assert env.client.get(f"/orders/{order['orderId']}", headers=phone).json()["diningOption"] == dining_option
 
 
 def test_order_numbers_count_up_and_restart_each_korean_day(env):

@@ -48,7 +48,7 @@ Functions: [phone.py](../app/routers/phone.py). Phone auth required except regis
 | `GET /sessions/{session_id}/state` | `phone_state` | Own session, order (or `null`) and store information. Includes the full menu while the kiosk pairing is active. |
 | `GET /sessions/{session_id}` | `get_session` | No body → own session: status, cart, help flag, order ID and last activity time. |
 | `PUT /sessions/{session_id}/cart` | `update_cart` | `items` → replaces the cart; returns `cart` event with priced `lines`, `total`, `summary`. `[]` clears it. |
-| `POST /sessions/{session_id}/order` | `place_order` | `items`, optional `paymentMethod`, `note` → `ordered` event with `orderId`, `orderNumber`, total and status. Frees the kiosk. |
+| `POST /sessions/{session_id}/order` | `place_order` | `items`, optional `paymentMethod`, `note` and `diningOption` (`dine_in` or `takeaway`) → `ordered` event with `orderId`, `orderNumber`, total and status. Frees the kiosk. Staff order snapshots include the saved dining option. |
 | `POST /sessions/{session_id}/help` | `ask_for_help` | No body → flags the session for staff; returns `help` event. |
 | `POST /sessions/{session_id}/end` | `disconnect` | No body → disconnects; returns `ended` event. Does not cancel an order. |
 | `GET /orders/{order_id}` | `get_order` | No body → own order: status, lines, total, summary, payment choice, note and timestamps. |

@@ -19,6 +19,7 @@ from sqlalchemy.orm.exc import StaleDataError
 
 from app import config
 from app.errors import AppError
+from app.schemas import DiningOption
 from app.logic import (
     STATUS_TIME_FIELD,
     build_order_lines,
@@ -213,7 +214,8 @@ def sync_cart(db: Session, device: Device, session_id: str, items: Any, now: int
 
 def submit_order(
     db: Session, device: Device, session_id: str, items: Any, payment_method: str, note: str, now: int,
-    quote_id: str | None = None, request_key: str | None = None, *, simulate_payment: bool = False,
+    quote_id: str | None = None, request_key: str | None = None, *,
+    simulate_payment: bool = False, dining_option: DiningOption | None = None,
 ) -> dict[str, Any]:
     if payment_method not in config.PAYMENT_METHODS:
         raise AppError("bad-payment-method", f"paymentMethod must be one of: {', '.join(config.PAYMENT_METHODS)}.")
@@ -225,6 +227,8 @@ def submit_order(
     details = {"items": items, "paymentMethod": payment_method, "note": note, "quoteId": quote_id}
     if simulate_payment:
         details["simulatePayment"] = True
+    if dining_option is not None:
+        details["diningOption"] = dining_option
     fingerprint = hashlib.sha256(json.dumps(
         details,
         sort_keys=True, separators=(",", ":"), ensure_ascii=False,
@@ -268,6 +272,7 @@ def submit_order(
             summary=summary,
             note=note.strip(),
             payment_method=payment_method,
+            dining_option=dining_option,
             simulated_approved_amount=total if simulate_payment else None,
             status="submitted",
             created_at=now,
@@ -284,6 +289,7 @@ def submit_order(
             "ordered", session.kiosk_id, now, sessionId=session.id, storeId=session.store_id, orderId=order.id,
             orderNumber=order.order_number, total=total, summary=summary, lines=lines, status="submitted",
             simulatedApprovedAmount=order.simulated_approved_amount,
+            diningOption=order.dining_option,
             paymentMethod=payment_method, note=order.note, createdAtMs=order.created_at, updatedAtMs=order.updated_at,
         )
         if request_key:
@@ -424,6 +430,7 @@ def order_dict(order: Order) -> dict[str, Any]:
         "lines": order.lines,
         "note": order.note,
         "paymentMethod": order.payment_method,
+        "diningOption": order.dining_option,
         "simulatedApprovedAmount": order.simulated_approved_amount,
         "createdAtMs": order.created_at,
         "updatedAtMs": order.updated_at,
